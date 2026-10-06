@@ -1,0 +1,218 @@
+/**
+ * Seed filament catalog.
+ * HEX values are approximate display colors based on publicly listed swatches.
+ * They are NOT measured physical truths. `hexVerified` marks the ones the
+ * (mock) community has re-measured from real prints.
+ */
+import type { Filament, Finish, Manufacturer, Material, ProductLine, Transparency } from '@/types'
+
+export const manufacturers: Manufacturer[] = [
+  { id: 'bambu', name: 'Bambu Lab', website: 'https://bambulab.com' },
+  { id: 'polymaker', name: 'Polymaker', website: 'https://polymaker.com' },
+  { id: 'prusament', name: 'Prusament', website: 'https://prusament.com' },
+  { id: 'hatchbox', name: 'Hatchbox', website: 'https://hatchbox3d.com' },
+  { id: 'esun', name: 'eSUN', website: 'https://esun3d.com' },
+  { id: 'overture', name: 'Overture', website: 'https://overture3d.com' },
+  { id: 'elegoo', name: 'Elegoo', website: 'https://elegoo.com' },
+  { id: 'sunlu', name: 'Sunlu', website: 'https://sunlu.com' },
+]
+
+export const productLines: ProductLine[] = [
+  { id: 'bambu-pla-basic', manufacturerId: 'bambu', name: 'PLA Basic', material: 'PLA', finish: 'basic' },
+  { id: 'bambu-pla-matte', manufacturerId: 'bambu', name: 'PLA Matte', material: 'PLA', finish: 'matte' },
+  { id: 'bambu-pla-silk', manufacturerId: 'bambu', name: 'PLA Silk+', material: 'PLA', finish: 'silk' },
+  { id: 'bambu-petg-hf', manufacturerId: 'bambu', name: 'PETG HF', material: 'PETG', finish: 'basic' },
+  { id: 'polymaker-polyterra', manufacturerId: 'polymaker', name: 'PolyTerra PLA', material: 'PLA', finish: 'matte' },
+  { id: 'polymaker-polylite-pla', manufacturerId: 'polymaker', name: 'PolyLite PLA', material: 'PLA', finish: 'basic' },
+  { id: 'polymaker-polylite-petg', manufacturerId: 'polymaker', name: 'PolyLite PETG', material: 'PETG', finish: 'basic' },
+  { id: 'prusament-pla', manufacturerId: 'prusament', name: 'Prusament PLA', material: 'PLA', finish: 'basic' },
+  { id: 'prusament-petg', manufacturerId: 'prusament', name: 'Prusament PETG', material: 'PETG', finish: 'basic' },
+  { id: 'hatchbox-pla', manufacturerId: 'hatchbox', name: 'PLA', material: 'PLA', finish: 'basic' },
+  { id: 'esun-pla-plus', manufacturerId: 'esun', name: 'PLA+', material: 'PLA+', finish: 'basic' },
+  { id: 'esun-abs-plus', manufacturerId: 'esun', name: 'ABS+', material: 'ABS', finish: 'basic' },
+  { id: 'overture-pla', manufacturerId: 'overture', name: 'PLA', material: 'PLA', finish: 'basic' },
+  { id: 'overture-asa', manufacturerId: 'overture', name: 'ASA', material: 'ASA', finish: 'basic' },
+  { id: 'elegoo-pla', manufacturerId: 'elegoo', name: 'PLA', material: 'PLA', finish: 'basic' },
+  { id: 'sunlu-pla-matte', manufacturerId: 'sunlu', name: 'PLA Matte', material: 'PLA', finish: 'matte' },
+]
+
+type Row = [colorName: string, hex: string, code?: string, opts?: { finish?: Finish; transparency?: Transparency; verified?: boolean; notes?: string }]
+
+const lines: Record<string, Row[]> = {
+  'bambu-pla-basic': [
+    ['Jade White', '#FFFFFF', '10100', { verified: true, notes: 'Bright, slightly cool white. The go-to base for pastels.' }],
+    ['Black', '#000000', '10101', { verified: true }],
+    ['Cobalt Blue', '#0056B8', '10601', { verified: true, notes: 'Very strong tint. A little goes a long way.' }],
+    ['Red', '#C12E1F', '10200', { verified: true }],
+    ['Yellow', '#F4EE2A', '10400', { verified: true }],
+    ['Orange', '#FF6A13', '10300'],
+    ['Bambu Green', '#00AE42', '10501', { verified: true }],
+    ['Magenta', '#EC008C', '10202', { verified: true }],
+    ['Cyan', '#0086D6', '10603', { verified: true }],
+    ['Purple', '#5E43B7', '10700', { verified: true }],
+    ['Gray', '#8E9089', '10103'],
+    ['Light Gray', '#D1D3D5', '10104'],
+    ['Silver', '#A6A9AA', '10102', { finish: 'metallic' }],
+    ['Brown', '#9D432C', '10800'],
+    ['Beige', '#F7E6DE', '10201'],
+    ['Pink', '#F55A74', '10203'],
+    ['Gold', '#E4BD68', '10401', { finish: 'metallic' }],
+    ['Mistletoe Green', '#3F8E43', '10502'],
+    ['Turquoise', '#00B1B7', '10605'],
+    ['Indigo Purple', '#482960', '10701'],
+    ['Maroon Red', '#9D2235', '10205'],
+    ['Blue Grey', '#5B6579', '10602'],
+    ['Sunflower Yellow', '#FEC600', '10402'],
+    ['Cocoa Brown', '#6F5034', '10802'],
+  ],
+  'bambu-pla-matte': [
+    ['Ivory White', '#FFFFFF', '11100'],
+    ['Charcoal', '#000000', '11101'],
+    ['Ash Gray', '#9B9EA0', '11102'],
+    ['Lilac Purple', '#AE96D4', '11700', { verified: true }],
+    ['Sakura Pink', '#E8AFCF', '11201', { verified: true }],
+    ['Ice Blue', '#A3D8E1', '11601'],
+    ['Marine Blue', '#0078BF', '11600'],
+    ['Dark Blue', '#042F56', '11602'],
+    ['Scarlet Red', '#DE4343', '11200'],
+    ['Mandarin Orange', '#F99963', '11300'],
+    ['Lemon Yellow', '#F7D959', '11400'],
+    ['Grass Green', '#61C680', '11500'],
+    ['Apple Green', '#C2E189', '11502'],
+    ['Desert Tan', '#E8DBB7', '11401'],
+    ['Latte Brown', '#D3B7A7', '11800'],
+    ['Dark Chocolate', '#4D3324', '11801'],
+    ['Terracotta', '#B15533', '11203'],
+    ['Plum', '#851A52', '11204'],
+  ],
+  'bambu-pla-silk': [
+    ['Silk Gold', '#F4A925', '13400', { finish: 'silk' }],
+    ['Silk Silver', '#C8C8C8', '13101', { finish: 'silk' }],
+    ['Silk Mint', '#96DCB9', '13501', { finish: 'silk' }],
+    ['Silk Rose Gold', '#BA9594', '13201', { finish: 'silk' }],
+  ],
+  'bambu-petg-hf': [
+    ['White', '#FFFFFF', '33100'],
+    ['Black', '#000000', '33101'],
+    ['Red', '#EB3A3A', '33200'],
+    ['Blue', '#002E96', '33600'],
+    ['Yellow', '#FFD00B', '33400'],
+    ['Green', '#00AE42', '33500'],
+  ],
+  'polymaker-polyterra': [
+    ['Cotton White', '#E6DDDB'],
+    ['Charcoal Black', '#2B2B2D'],
+    ['Fossil Grey', '#7F7F7F'],
+    ['Lava Red', '#C8102E'],
+    ['Sunrise Orange', '#F68D2E'],
+    ['Savannah Yellow', '#F1C232'],
+    ['Forest Green', '#3E7D4C'],
+    ['Arctic Teal', '#2BA8A4'],
+    ['Ocean Blue', '#1D4E89'],
+    ['Lavender Purple', '#A389C4'],
+    ['Peach', '#F5B79D'],
+    ['Muted Red', '#A0453E'],
+  ],
+  'polymaker-polylite-pla': [
+    ['White', '#F7F7F5'],
+    ['Black', '#1A1A1A'],
+    ['Blue', '#1F5AA6'],
+    ['Red', '#D2232A'],
+    ['Teal', '#00857C'],
+    ['Translucent Blue', '#3A7BD5', undefined, { finish: 'translucent', transparency: 'translucent' }],
+  ],
+  'polymaker-polylite-petg': [
+    ['White', '#F5F5F3'],
+    ['Black', '#1C1C1C'],
+    ['Grey', '#8A8D8F'],
+  ],
+  'prusament-pla': [
+    ['Vanilla White', '#F3EDE0'],
+    ['Galaxy Black', '#1D1D21', undefined, { finish: 'sparkle' }],
+    ['Prusa Orange', '#FA6831'],
+    ['Azure Blue', '#2E7FD1'],
+    ['Lipstick Red', '#C7162B'],
+    ['Pistachio Green', '#9BC33C'],
+    ['Mystic Green', '#3C7D5A'],
+    ['Royal Blue', '#22339A'],
+    ['Pineapple Yellow', '#F7D117'],
+    ['Lilac Purple', '#B48BC5'],
+  ],
+  'prusament-petg': [
+    ['Signal White', '#F4F4F4'],
+    ['Jet Black', '#141414'],
+    ['Ultramarine Blue', '#1E3E9C'],
+  ],
+  'hatchbox-pla': [
+    ['White', '#FAFAFA'],
+    ['Black', '#121212'],
+    ['True Blue', '#1A49B6'],
+    ['Red', '#C81F2F'],
+    ['Yellow', '#FFD60A'],
+    ['Purple', '#5F2C91'],
+    ['Pink', '#F38FB4'],
+    ['Cool Gray', '#8C949B'],
+  ],
+  'esun-pla-plus': [
+    ['Cold White', '#F6F8FA'],
+    ['Black', '#141414'],
+    ['Fire Engine Red', '#C51F25'],
+    ['Light Blue', '#7DB4E6'],
+    ['Peak Green', '#3C9A44'],
+    ['Magenta', '#D0157D'],
+    ['Beige', '#E3CFAE'],
+    ['Skin', '#F1C7A5'],
+  ],
+  'esun-abs-plus': [
+    ['White', '#F4F4F2'],
+    ['Black', '#151515'],
+    ['Red', '#C02028'],
+    ['Blue', '#1C4FA6'],
+  ],
+  'overture-pla': [
+    ['Space Gray', '#55595C'],
+    ['Rock White', '#EEEDE8'],
+    ['Black', '#151515'],
+    ['Blue', '#2155B3'],
+    ['Red', '#D12A2A'],
+    ['Yellow', '#FDE02F'],
+  ],
+  'overture-asa': [
+    ['White', '#F2F2F0'],
+    ['Black', '#161616'],
+    ['Red', '#BF2228'],
+    ['Blue', '#1F4FA5'],
+  ],
+  'elegoo-pla': [
+    ['White', '#F8F8F6'],
+    ['Black', '#151515'],
+    ['Red', '#C9252B'],
+    ['Blue', '#1D57B3'],
+    ['Green', '#2D9C49'],
+  ],
+  'sunlu-pla-matte': [
+    ['Matte White', '#EFECE6'],
+    ['Matte Black', '#1E1E1E'],
+    ['Matte Mint', '#9FD6BF'],
+    ['Matte Caramel', '#B98252'],
+  ],
+}
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+
+export const filaments: Filament[] = Object.entries(lines).flatMap(([lineId, rows]) => {
+  const line = productLines.find((l) => l.id === lineId)!
+  return rows.map(([colorName, hex, code, opts]) => ({
+    id: `${lineId}-${slug(colorName)}`,
+    manufacturerId: line.manufacturerId,
+    productLineId: line.id,
+    material: line.material as Material,
+    colorName,
+    colorCode: code,
+    hex: hex.toUpperCase(),
+    hexVerified: opts?.verified ?? false,
+    finish: opts?.finish ?? line.finish,
+    transparency: opts?.transparency ?? 'opaque',
+    notes: opts?.notes,
+  }))
+})
