@@ -66,7 +66,7 @@ export default function SignUpPage() {
               const displayName = e.target.value
               setForm((f) => ({ ...f, displayName, username: touchedUser ? f.username : slugify(displayName).replace(/-/g, '.').slice(0, 24) }))
             }}
-            placeholder="Mira Okafor"
+            placeholder="John Smith"
             required
           />
         </Field>

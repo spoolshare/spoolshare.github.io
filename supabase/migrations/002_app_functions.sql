@@ -43,7 +43,23 @@ end $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute function handle_new_user();
 
+-- Backfill: anyone who signed up before this migration gets a profile now.
+do $$
+declare u auth.users;
+begin
+  for u in select * from auth.users where id not in (select id from profiles) loop
+    insert into profiles (id, username, display_name, avatar_hue)
+    select u.id, x.uname, coalesce(nullif(trim(u.raw_user_meta_data->>'display_name'), ''), x.uname), floor(random() * 360)::int
+    from (
+      select case when exists (select 1 from profiles where username = b.base) then b.base || substr(md5(u.id::text), 1, 4) else b.base end as uname
+      from (select left(case when length(c.v) < 3 then c.v || 'maker' else c.v end, 20) as base from (select regexp_replace(lower(coalesce(u.raw_user_meta_data->>'username', split_part(u.email, '@', 1), 'maker')), '[^a-z0-9._-]', '', 'g') as v) c) b
+    ) x;
+  end loop;
+end $$;
+
 -- --------------------------------------------- client-generated stage ids --
+drop policy if exists "inputs read" on stage_inputs;
+drop policy if exists "inputs author write" on stage_inputs;
 alter table stage_inputs drop constraint if exists stage_inputs_source_stage_id_fkey;
 alter table stage_inputs drop constraint if exists stage_inputs_stage_id_fkey;
 alter table recipe_stages alter column id drop default;
@@ -54,6 +70,16 @@ alter table stage_inputs alter column stage_id type text using stage_id::text;
 alter table stage_inputs alter column source_stage_id type text using source_stage_id::text;
 alter table stage_inputs add constraint stage_inputs_stage_id_fkey foreign key (stage_id) references recipe_stages(id) on delete cascade;
 alter table stage_inputs add constraint stage_inputs_source_stage_id_fkey foreign key (source_stage_id) references recipe_stages(id) on delete cascade;
+
+create policy "inputs read" on stage_inputs for select using (
+  exists (select 1 from recipe_stages s join recipes r on r.id = s.recipe_id
+          where s.id = stage_id and (r.status = 'published' or r.author_id = auth.uid()))
+);
+create policy "inputs author write" on stage_inputs for all using (
+  exists (select 1 from recipe_stages s join recipes r on r.id = s.recipe_id where s.id = stage_id and r.author_id = auth.uid())
+) with check (
+  exists (select 1 from recipe_stages s join recipes r on r.id = s.recipe_id where s.id = stage_id and r.author_id = auth.uid())
+);
 
 -- ------------------------------------------------------------- examples ----
 alter table recipes add column if not exists is_example boolean not null default false;

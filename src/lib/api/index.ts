@@ -7,6 +7,7 @@
  */
 import type { SpoolShareApi } from './types'
 import { createMockApi } from './mock/adapter'
+import { createSupabaseApi } from './supabase/adapter'
 
 export * from './types'
 
@@ -14,9 +15,17 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 function createApi(): SpoolShareApi {
-  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-    // TODO(supabase): return createSupabaseApi({ url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY })
-    console.info('[spoolshare] Supabase env vars detected, but the Supabase adapter is not wired up yet. Using mock data.')
+  // `?backend=mock` forces the local demo (handy for testing without touching real data).
+  let forceMock = false
+  try {
+    const param = new URLSearchParams(window.location.search).get('backend')
+    if (param) sessionStorage.setItem('spoolshare:backend', param)
+    forceMock = sessionStorage.getItem('spoolshare:backend') === 'mock'
+  } catch {
+    /* no window/storage */
+  }
+  if (SUPABASE_URL && SUPABASE_ANON_KEY && !forceMock) {
+    return createSupabaseApi({ url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY })
   }
   return createMockApi()
 }

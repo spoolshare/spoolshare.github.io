@@ -1,3 +1,4 @@
+import { api } from '@/lib/api'
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { AlertCircle, Sparkles } from 'lucide-react'
@@ -54,6 +55,7 @@ export default function SignInPage() {
         </Field>
         <Button type="submit" size="lg" className="w-full" loading={pending === 'form'} disabled={!email || !password}>Sign in</Button>
       </form>
+      {api.backend === 'mock' && <>
       <Divider label="or" className="my-6" />
       <Button
         variant="outline"
@@ -69,6 +71,7 @@ export default function SignInPage() {
       >
         Continue as demo maker
       </Button>
+      </>}
     </AuthLayout>
   )
 }

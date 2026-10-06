@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router'
 import {
-  Bell, Bookmark, Boxes, Compass, LogOut, Monitor, Moon, PlusCircle, Settings, Sun, Target, User,
+  Bell, Bookmark, Boxes, Compass, LogOut, Monitor, Moon, PlusCircle, Settings, Sun, Target, User, Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { useSession } from '@/lib/hooks/useSession'
@@ -141,6 +141,7 @@ function UserMenu() {
         { label: 'Saved recipes', icon: <Bookmark className="size-4" />, onSelect: () => navigate('/saved') },
         { label: 'My Filaments', icon: <Boxes className="size-4" />, onSelect: () => navigate('/filaments') },
         { label: 'Settings', icon: <Settings className="size-4" />, onSelect: () => navigate('/settings') },
+        ...(user.role === 'admin' ? [{ label: 'Members (admin)', icon: <Users className="size-4" />, onSelect: () => navigate('/admin/members') }] : []),
         { divider: true, label: '' },
         { label: 'Sign out', icon: <LogOut className="size-4" />, onSelect: async () => { await signOut(); navigate('/') } },
       ]}

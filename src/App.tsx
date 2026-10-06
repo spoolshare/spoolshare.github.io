@@ -19,6 +19,7 @@ const NotificationsPage = lazy(() => import('@/features/notifications/Notificati
 const SignInPage = lazy(() => import('@/features/auth/SignInPage'))
 const SignUpPage = lazy(() => import('@/features/auth/SignUpPage'))
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage'))
+const MembersPage = lazy(() => import('@/features/admin/MembersPage'))
 const NotFoundPage = lazy(() => import('@/features/NotFoundPage'))
 
 export const router = createBrowserRouter(
@@ -44,6 +45,7 @@ export const router = createBrowserRouter(
         { path: 'signin', element: <SignInPage /> },
         { path: 'signup', element: <SignUpPage /> },
         { path: 'settings', element: <SettingsPage /> },
+        { path: 'admin/members', element: <MembersPage /> },
         { path: '*', element: <NotFoundPage /> },
       ],
     },

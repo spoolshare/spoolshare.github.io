@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router'
 import {
   ArrowRight, Boxes, CircleCheck, Clock, FlaskConical, Flame, Repeat2, Sparkles, Target, Users,
 } from 'lucide-react'
-import type { Hex } from '@/types'
+import type { Hex, TrustLevel } from '@/types'
+import { TrustBadge } from '@/components/recipe/badges'
 import { api } from '@/lib/api'
 import { useQuery } from '@/lib/hooks/useQuery'
 import { useRecipeSearch } from '@/lib/hooks/useRecipes'
@@ -11,7 +12,6 @@ import { useInventory } from '@/lib/hooks/useInventory'
 import { useCanMakeFilter, useRecentlyViewed } from '@/lib/hooks/usePreferences'
 import { HUE_FAMILIES, nearestColorName } from '@/lib/color/names'
 import { readableOn, shade } from '@/lib/color/convert'
-import { cn } from '@/lib/utils/cn'
 import { ColorPicker } from '@/components/color/ColorPicker'
 import { ColorDot, HexChip } from '@/components/color/Swatch'
 import { RecipeRail } from '@/components/recipe/RecipeCard'
@@ -317,11 +317,11 @@ function HowItWorks() {
     { n: '02', icon: FlaskConical, title: 'Mix', body: 'Follow exact multi-stage ratios with a gram calculator and a step-by-step “Make this color” mode.' },
     { n: '03', icon: Repeat2, title: 'Share & reproduce', body: 'Post your printed swatch. When others reproduce it and get a close match, the recipe earns trust.' },
   ]
-  const ladder = [
-    { label: 'Calculated', cls: 'border-dashed border-calc text-calc', note: 'math only' },
-    { label: 'Tested', cls: 'border-border-strong text-fg', note: '1 swatch' },
-    { label: 'Reproduced', cls: 'border-accent text-accent', note: '≥1 close match' },
-    { label: 'Highly Reproduced', cls: 'border-accent bg-accent text-accent-fg', note: '5+ & 80% agree' },
+  const ladder: { level: TrustLevel; note: string }[] = [
+    { level: 'calculated', note: 'math only' },
+    { level: 'tested', note: '1 printed swatch' },
+    { level: 'reproduced', note: '≥1 close match' },
+    { level: 'highly-reproduced', note: '5+ and 80% agree' },
   ]
   return (
     <section className="mt-16 rounded-2xl border border-border bg-surface p-6 sm:p-10">
@@ -349,10 +349,10 @@ function HowItWorks() {
         <h3 className="text-sm font-semibold">The trust ladder</h3>
         <ol className="mt-3 flex flex-wrap items-center gap-2">
           {ladder.map((l, i) => (
-            <li key={l.label} className="flex items-center gap-2">
-              <span className={cn('inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm font-medium', l.cls)}>
-                {l.label}
-                <span className="text-xs font-normal opacity-75">· {l.note}</span>
+            <li key={l.level} className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5">
+                <TrustBadge level={l.level} size="md" />
+                <span className="text-xs text-fg-subtle">· {l.note}</span>
               </span>
               {i < ladder.length - 1 && <ArrowRight className="size-4 text-fg-subtle" aria-hidden />}
             </li>

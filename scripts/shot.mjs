@@ -14,6 +14,7 @@ for (const a of JSON.parse(actions)) {
   if (a.fill) await page.fill(a.fill, a.value)
   if (a.wait) await page.waitForTimeout(a.wait)
   if (a.goto) await page.goto(base + a.goto, { waitUntil: 'networkidle' })
+  if (a.eval) await page.evaluate(a.eval)
 }
 await page.waitForTimeout(400)
 await page.screenshot({ path: out, fullPage: true })

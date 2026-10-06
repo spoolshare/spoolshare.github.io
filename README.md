@@ -31,17 +31,29 @@ Settings → *Reset demo data* restores the seed.
    (`/<repo-name>/`), and publishes. `dist/404.html` is a copy of `index.html`, so deep links like
    `/r/dusty-purple` work.
 
-## Connecting Supabase (later)
+## Connecting Supabase
 
-1. Create a Supabase project and run `supabase/schema.sql` (tables, RLS policies, triggers, storage bucket).
-2. Add **repository variables** (not secrets; these values are public by design):
-   `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-3. Implement `src/lib/api/supabase/adapter.ts` against the `SpoolShareApi` interface in
-   `src/lib/api/types.ts` and return it from `src/lib/api/index.ts`.
+The app uses Supabase automatically when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set
+(in `.env.local` locally, and as repository **variables** for the GitHub Pages build). Add `?backend=mock` to any
+URL to use the local demo data instead for that browser tab.
 
-**Never** put the `service_role` key in any `VITE_` variable or in frontend code. Privileged work
-(ΔE computation on reproductions, publishing, moderation) belongs in Supabase Edge Functions or
-`security definer` SQL functions.
+Run these in the Supabase **SQL Editor**, in this order:
+
+1. `supabase/schema.sql`: tables, row-level security, triggers, the `swatches` storage bucket
+2. `supabase/seed.sql`: the filament catalog (8 brands, 125 filaments)
+3. `supabase/migrations/002_app_functions.sql`: admin role, profile-on-signup, `save_recipe`, members list
+4. `supabase/seed_examples.sql`: 30 official example recipes under the **SpoolShare** account. Their colors are
+   calculated predictions, so they show as *Calculated / Untested* until someone reproduces them.
+
+Then sign up in the app and make yourself admin:
+
+```sql
+update profiles set role = 'admin' where username = 'your-username';
+```
+
+The admin-only **Members** page is at `/admin/members` (also in the avatar menu).
+
+**Never** put the `service_role` / secret key in any `VITE_` variable or in frontend code.
 
 ## Project layout
 

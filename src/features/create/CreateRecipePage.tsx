@@ -407,7 +407,7 @@ function SignInGate() {
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <ButtonLink to="/signin">Sign in</ButtonLink>
-          <Button
+          {api.backend === 'mock' && <Button
             variant="outline"
             loading={busy}
             onClick={async () => {
@@ -416,7 +416,7 @@ function SignInGate() {
             }}
           >
             Try the demo account
-          </Button>
+          </Button>}
         </div>
         <p className="mt-4 text-xs text-fg-muted">New here? <Link to="/signup" className="font-medium text-accent hover:underline">Create an account</Link></p>
       </Card>
