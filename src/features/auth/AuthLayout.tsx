@@ -38,8 +38,7 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
           </div>
         ))}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-surface via-surface/90 to-transparent p-8 pt-20">
-          <div className="text-3xl font-semibold tracking-tight">Mix a color. <span className="text-accent">Share the recipe.</span></div>
-          <p className="mt-2 max-w-sm text-fg-muted">Real people, real filament, real printed swatches. Find colors you can make with the spools you already own.</p>
+          <p className="max-w-sm text-fg-muted">Community-made filament colors and their recipes, for the Multi-Color Filament Mixer.</p>
         </div>
       </div>
     </div>

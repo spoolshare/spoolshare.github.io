@@ -16,11 +16,6 @@ export function useSession() {
       afterAuthChange()
       return p
     },
-    signInDemo: async () => {
-      const p = await api.signInDemo()
-      afterAuthChange()
-      return p
-    },
     signUp: async (input: SignUpInput) => {
       const p = await api.signUp(input)
       afterAuthChange()

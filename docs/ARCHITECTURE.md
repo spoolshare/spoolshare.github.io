@@ -1,6 +1,6 @@
 # SpoolShare — Architecture & Product Plan
 
-> **Mix a color. Share the recipe.**
+> A community library of filament colors and their reproducible recipes.
 > A community database of *physically tested* mixed-filament color recipes.
 
 The core value is **real people + real filament + real printed swatches + reproducible recipes**.

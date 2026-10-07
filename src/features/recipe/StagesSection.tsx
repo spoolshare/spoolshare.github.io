@@ -2,7 +2,8 @@ import { Calculator, CornerDownRight } from 'lucide-react'
 import type { FilamentView, Hex, ID, Stage } from '@/types'
 import { cn } from '@/lib/utils/cn'
 import { formatGrams, formatPercent } from '@/lib/utils/format'
-import { formatRatio, type Plan } from '@/lib/recipe/composition'
+import { formatRatio, slotCounts, slotLayout, type Plan } from '@/lib/recipe/composition'
+import { SlotStrip } from '@/components/recipe/SlotStrip'
 import { ColorDot } from '@/components/color/Swatch'
 import { StageFlow } from '@/components/recipe/StageFlow'
 import { Badge, Card } from '@/components/ui'
@@ -12,12 +13,15 @@ export function StagesSection({
   stages,
   filamentsById,
   finalHex,
+  finalPredicted = false,
   plan,
   owned,
 }: {
   stages: Stage[]
   filamentsById: Record<ID, FilamentView>
   finalHex: Hex
+  /** True for example recipes, whose final color is calculated rather than printed. */
+  finalPredicted?: boolean
   plan: Plan
   owned?: Set<ID>
 }) {
@@ -26,7 +30,7 @@ export function StagesSection({
       {stages.length > 1 && (
         <Card className="p-4 sm:p-5">
           <h3 className="mb-3 text-sm font-semibold">Flow</h3>
-          <StageFlow stages={stages} filamentsById={filamentsById} finalHex={finalHex} />
+          <StageFlow stages={stages} filamentsById={filamentsById} finalHex={finalHex} finalPredicted={finalPredicted} />
         </Card>
       )}
 
@@ -34,8 +38,11 @@ export function StagesSection({
         {plan.stages.map((ps, i) => {
           const s = ps.stage
           const final = ps.isFinal
-          const out = final ? { hex: finalHex, predicted: false } : stageColor(stages, s, filamentsById)
+          const out = final ? { hex: finalHex, predicted: finalPredicted } : stageColor(stages, s, filamentsById)
           const consumers = ps.consumedBy.map((id) => stages.findIndex((x) => x.id === id) + 1)
+          const parts = ps.inputs.map((pi) => pi.input.parts)
+          const slots = slotCounts(parts)
+          const layout = slotLayout(parts)
           return (
             <li key={s.id} className="relative pl-10 sm:pl-12">
               {/* timeline rail */}
@@ -72,7 +79,7 @@ export function StagesSection({
                       className={cn('size-11 shrink-0 rounded-full border border-border', out.predicted && 'outline-2 outline-offset-2 outline-dashed outline-calc')}
                       style={{ background: out.hex }}
                       role="img"
-                      aria-label={`${out.predicted ? 'Calculated preview' : 'Measured'} color of ${s.outputName}: ${out.hex}`}
+                      aria-label={`${out.predicted ? 'Calculated preview' : 'Printed'} color of ${s.outputName}: ${out.hex}`}
                     />
                   </div>
                 </div>
@@ -85,7 +92,7 @@ export function StagesSection({
                       <tr className="text-left text-xs text-fg-subtle">
                         <th scope="col" className="pl-4 pr-2 pt-3 pb-1 font-medium">Input</th>
                         <th scope="col" className="px-2 pt-3 pb-1 text-right font-medium">Share</th>
-                        <th scope="col" className="hidden px-2 pt-3 pb-1 text-right font-medium sm:table-cell">Load units</th>
+                        <th scope="col" className="hidden px-2 pt-3 pb-1 text-right font-medium sm:table-cell">Slots</th>
                         <th scope="col" className="px-4 pt-3 pb-1 text-right font-medium">Weight</th>
                       </tr>
                     </thead>
@@ -110,9 +117,9 @@ export function StagesSection({
                             </td>
                             <td className="px-2 py-2 text-right font-mono text-xs tabular">
                               {formatPercent(pi.fraction)}
-                              {pi.units != null && <span className="block text-fg-subtle sm:hidden">{pi.units}×</span>}
+                              {slots && <span className="block text-fg-subtle sm:hidden">{slots[ps.inputs.indexOf(pi)]} of 4</span>}
                             </td>
-                            <td className="hidden px-2 py-2 text-right font-mono text-xs text-fg-muted tabular sm:table-cell">{pi.units != null ? `${pi.units}×` : '—'}</td>
+                            <td className="hidden px-2 py-2 text-right font-mono text-xs text-fg-muted tabular sm:table-cell">{slots ? `${slots[ps.inputs.indexOf(pi)]} of 4` : '—'}</td>
                             <td className="px-4 py-2 text-right font-mono text-xs font-medium tabular">{formatGrams(pi.grams)}</td>
                           </tr>
                         )
@@ -120,6 +127,14 @@ export function StagesSection({
                     </tbody>
                   </table>
                 </div>
+                {layout ? (
+                  <div className="border-t border-border px-4 py-3">
+                    <div className="mb-1.5 text-xs font-medium text-fg-muted">Mixer slots</div>
+                    <SlotStrip size="sm" slots={layout.map((k) => { const d = describeInput(ps.inputs[k].input, stages, filamentsById); return { name: d.name, hex: d.hex } })} />
+                  </div>
+                ) : (
+                  <p className="border-t border-border px-4 py-2.5 text-xs text-warn">This stage doesn’t fit the mixer’s 4 slots; combine by weight.</p>
+                )}
 
                 {(s.instructions || consumers.length > 0) && (
                   <div className="space-y-2 border-t border-border bg-surface-2/50 p-4 text-sm">

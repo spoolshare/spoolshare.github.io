@@ -238,6 +238,9 @@ export function validateStages(stages: Stage[]): RecipeIssue[] {
         issues.push({ stageId: s.id, inputId: inp.id, level: 'error', message: `Stage ${idx + 1} has an input with no filament selected.` })
       }
     })
+    if (s.inputs.length > 0 && s.inputs.every((i) => i.parts > 0) && !slotCounts(s.inputs.map((i) => i.parts))) {
+      issues.push({ stageId: s.id, level: 'warning', message: `Stage ${idx + 1} doesn\u2019t fit the mixer\u2019s 4 slots. Use 1:1, 3:1, 2:1:1 or 1:1:1:1, or split it into two stages.` })
+    }
     seen.add(s.id)
   })
   stages.slice(0, -1).forEach((s, idx) => {
@@ -247,3 +250,43 @@ export function validateStages(stages: Stage[]): RecipeIssue[] {
   })
   return issues
 }
+
+// ------------------------------------------------------------ Mixer slots --
+
+/**
+ * The Multi-Color Filament Mixer has 4 slots and every print fills all 4.
+ * Returns how many slots each input gets (e.g. 75/25 → [3, 1], 50/50 → [2, 2]),
+ * or null when the ratio can't be expressed in 4 equal slots.
+ */
+export function slotCounts(parts: number[], slots = 4): number[] | null {
+  const ints = simplestIntegerRatio(parts, slots)
+  if (!ints) return null
+  const total = ints.reduce((a, b) => a + b, 0)
+  if (total === 0 || slots % total !== 0) return null
+  return ints.map((n) => n * (slots / total))
+}
+
+/**
+ * Orders the slots so the same input is never next to itself when that's
+ * possible (better mixing): e.g. 2:1:1 → A, B, A, C. Returns input indexes per slot.
+ */
+export function slotLayout(parts: number[], slots = 4): number[] | null {
+  const counts = slotCounts(parts, slots)
+  if (!counts) return null
+  const order = counts.map((c, i) => ({ i, c })).filter((x) => x.c > 0).sort((a, b) => b.c - a.c)
+  const seq: number[] = []
+  for (const { i, c } of order) for (let k = 0; k < c; k++) seq.push(i)
+  // Fill even positions first, then odd: spreads the most common input apart.
+  const out = new Array<number>(slots)
+  const positions = [...Array(slots).keys()].filter((p) => p % 2 === 0).concat([...Array(slots).keys()].filter((p) => p % 2 === 1))
+  seq.forEach((inputIndex, k) => (out[positions[k]] = inputIndex))
+  return out
+}
+
+/** The slot ratios the mixer can make in a single print. */
+export const MIXER_RATIOS: { label: string; parts: number[] }[] = [
+  { label: '1:1', parts: [1, 1] },
+  { label: '3:1', parts: [3, 1] },
+  { label: '2:1:1', parts: [2, 1, 1] },
+  { label: '1:1:1:1', parts: [1, 1, 1, 1] },
+]

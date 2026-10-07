@@ -23,14 +23,16 @@ export function StageFlow({
   stages,
   filamentsById,
   finalHex,
+  finalPredicted = false,
   className,
 }: {
   stages: Stage[]
   filamentsById: Record<ID, FilamentView> | Map<ID, FilamentView>
   finalHex?: Hex
+  finalPredicted?: boolean
   className?: string
 }) {
-  const layout = useMemo(() => buildLayout(stages, filamentsById, finalHex), [stages, filamentsById, finalHex])
+  const layout = useMemo(() => buildLayout(stages, filamentsById, finalHex, finalPredicted), [stages, filamentsById, finalHex, finalPredicted])
   if (!layout) return null
   const { leaves, nodes, width, height } = layout
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
@@ -94,7 +96,7 @@ export function StageFlow({
       {nodes.some((n) => n.predicted) && (
         <p className="mt-2 flex items-center gap-1.5 text-[11px] text-fg-subtle">
           <svg width="14" height="14" aria-hidden><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--calc)" strokeDasharray="2 2" /></svg>
-          Dashed ring = intermediate color is a calculated preview, not a measured swatch.
+          Dashed ring = calculated preview, not a printed swatch.
         </p>
       )}
     </div>
@@ -119,7 +121,7 @@ function describe(stages: Stage[], byId: Record<ID, FilamentView> | Map<ID, Fila
     .join('. ')
 }
 
-function buildLayout(stages: Stage[], byId: Record<ID, FilamentView> | Map<ID, FilamentView>, finalHex?: Hex) {
+function buildLayout(stages: Stage[], byId: Record<ID, FilamentView> | Map<ID, FilamentView>, finalHex?: Hex, finalPredicted = false) {
   if (stages.length === 0) return null
   const get = (id: ID) => (byId instanceof Map ? byId.get(id) : byId[id])
   const index = new Map(stages.map((s, i) => [s.id, i]))
@@ -144,7 +146,7 @@ function buildLayout(stages: Stage[], byId: Record<ID, FilamentView> | Map<ID, F
   const placed = new Set<ID>()
 
   const colorOf = (s: Stage): { hex: Hex; predicted: boolean } => {
-    if (s.id === final.id && finalHex) return { hex: finalHex, predicted: false }
+    if (s.id === final.id && finalHex) return { hex: finalHex, predicted: finalPredicted }
     if (s.outputHex) return { hex: s.outputHex, predicted: false }
     try {
       const comp = flattenComposition(stages, s.id)

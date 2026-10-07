@@ -22,6 +22,9 @@ import { CanMakeBanner } from '@/components/recipe/CanMakeBanner'
 import { DifficultyMeter, TrustBadge } from '@/components/recipe/badges'
 import { Badge, Button, ButtonLink, Card, EmptyState, Menu, Skeleton, UserLink, useToast } from '@/components/ui'
 import { BatchControls } from './shared'
+import { resultColorLabel } from '@/lib/recipe/trust'
+import { MadeWithSection } from './MadeWithSection'
+import { RelatedColors } from './RelatedColors'
 import { StagesSection } from './StagesSection'
 import { ResultsSection } from './ResultsSection'
 import { CommentsSection } from './CommentsSection'
@@ -29,10 +32,12 @@ import { CollectionsDialog, ReportDialog } from './dialogs'
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview' },
-  { id: 'composition', label: 'Composition' },
-  { id: 'stages', label: 'Stages' },
-  { id: 'results', label: 'Results' },
+  { id: 'stages', label: 'Recipe' },
+  { id: 'make', label: 'Make it' },
+  { id: 'results', label: 'Community results' },
+  { id: 'made-with', label: 'Made with this color' },
   { id: 'comments', label: 'Comments' },
+  { id: 'related', label: 'Related colors' },
 ]
 
 export default function RecipeDetailPage() {
@@ -60,7 +65,7 @@ export default function RecipeDetailPage() {
     void api.recordView(recipe.id)
     recent.push({ id: recipe.id, slug: recipe.slug, name: recipe.name, hex: recipe.resultHex })
     document.title = `${recipe.name} · SpoolShare`
-    return () => { document.title = 'SpoolShare — Mix a color. Share the recipe.' }
+    return () => { document.title = 'SpoolShare' }
   }, [recipe]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: authorProfile } = useQuery(data ? `profile:${data.author.username}` : null, () => api.getProfile(data!.author.username), ['follows'])
@@ -147,8 +152,8 @@ export default function RecipeDetailPage() {
           </div>
 
           {/* large actual color block */}
-          <div className="color-transition flex h-24 items-end justify-between rounded-xl p-3 shadow-sm ring-1 ring-black/5" style={{ background: recipe.resultHex, color: readableOn(recipe.resultHex) }} role="img" aria-label={`Measured result color ${recipe.resultHex}`}>
-            <span className="text-xs font-semibold tracking-wide uppercase opacity-80">Measured result</span>
+          <div className="color-transition flex h-24 items-end justify-between rounded-xl p-3 shadow-sm ring-1 ring-black/5" style={{ background: recipe.resultHex, color: readableOn(recipe.resultHex) }} role="img" aria-label={`${resultColorLabel(recipe)} color ${recipe.resultHex}`}>
+            <span className="text-xs font-semibold tracking-wide uppercase opacity-80">{resultColorLabel(recipe)}</span>
             <span className="font-mono text-sm font-medium">{recipe.resultHex}</span>
           </div>
 
@@ -199,7 +204,7 @@ export default function RecipeDetailPage() {
           </div>
           {isOwn && <p className="-mt-2 text-xs text-fg-subtle">This is your recipe. “I Made This” is for other makers’ reproductions.</p>}
 
-          {canMake ? <CanMakeBanner result={canMake} /> : <CanMakeBanner result={{ canMake: false, ownedCount: 0, requiredCount: data.composition.length, missing: [], substitutes: [] }} />}
+          {canMake ? <CanMakeBanner result={canMake} /> : <CanMakeBanner result={{ canMake: false, ownedCount: 0, requiredCount: data.composition.length, missing: [], owned: [], substitutes: [] }} />}
         </div>
       </div>
 
@@ -252,7 +257,22 @@ export default function RecipeDetailPage() {
           </div>
         </Section>
 
-        <Section id="composition" title="Final composition" subtitle="The true raw-filament makeup after flattening every intermediate stage.">
+        <Section
+          id="stages"
+          title="Recipe"
+          subtitle={`${plural(recipe.stages.length, 'stage')}. Amounts below are for ${formatGrams(grams)} of finished color${waste ? ` + ${waste}% waste` : ''}.`}
+          action={<ButtonLink to={`/r/${recipe.slug}/make`} size="sm" variant="soft" icon={<Play className="size-3.5" />}>Guided mode</ButtonLink>}
+        >
+          <StagesSection stages={recipe.stages} filamentsById={data.filamentsById} finalHex={recipe.resultHex} finalPredicted={!!recipe.isExample} plan={plan} owned={inv.signedIn ? inv.ownedIds : undefined} />
+          {recipe.notes && (
+            <Card className="mt-6 border-l-4 border-l-accent p-4">
+              <h3 className="text-sm font-semibold">Creator’s notes</h3>
+              <p className="mt-1 text-sm leading-relaxed whitespace-pre-line text-fg-muted">{recipe.notes}</p>
+            </Card>
+          )}
+        </Section>
+
+        <Section id="composition" title="True final composition" subtitle="What the finished filament really contains once every intermediate stage is flattened. Set an amount to get grams.">
           <Card className="p-4 sm:p-5">
             <BatchControls grams={grams} onGrams={setGrams} waste={waste} onWaste={setWaste} className="mb-5" />
             <CompositionBar composition={data.composition} filamentsById={data.filamentsById} grams={plan.totals.reduce((a, t) => a + t.grams, 0)} owned={inv.signedIn ? inv.ownedIds : undefined} />
@@ -263,27 +283,30 @@ export default function RecipeDetailPage() {
           </Card>
         </Section>
 
-        <Section
-          id="stages"
-          title="Mixing stages"
-          subtitle={`${plural(recipe.stages.length, 'stage')}. Amounts below are for ${formatGrams(grams)} of finished color${waste ? ` + ${waste}% waste` : ''}.`}
-          action={<ButtonLink to={`/r/${recipe.slug}/make`} size="sm" variant="soft" icon={<Play className="size-3.5" />}>Guided mode</ButtonLink>}
-        >
-          <StagesSection stages={recipe.stages} filamentsById={data.filamentsById} finalHex={recipe.resultHex} plan={plan} owned={inv.signedIn ? inv.ownedIds : undefined} />
-          {recipe.notes && (
-            <Card className="mt-6 border-l-4 border-l-accent p-4">
-              <h3 className="text-sm font-semibold">Creator’s notes</h3>
-              <p className="mt-1 text-sm leading-relaxed whitespace-pre-line text-fg-muted">{recipe.notes}</p>
-            </Card>
-          )}
+        <Section id="make" title="Make this color">
+          <Card className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
+            <div className="min-w-0 flex-1 text-sm text-fg-muted">
+              <p className="text-[15px] font-medium text-fg">Step-by-step, at your printer.</p>
+              <p className="mt-1">Guided mode walks you through each stage: which filament goes in each of the mixer’s 4 slots, what to print, and which intermediate to keep. You can tick off steps as you go.</p>
+            </div>
+            <ButtonLink to={`/r/${recipe.slug}/make`} icon={<Play className="size-4" />}>Start guided mode</ButtonLink>
+          </Card>
         </Section>
 
-        <Section id="results" title="Results" subtitle="The original swatch compared with what other makers actually got.">
+        <Section id="results" title="Community results" subtitle="The original swatch compared with what other makers actually got.">
           <ResultsSection recipe={recipe} stats={data.stats} reproductions={data.reproductions} filamentsById={data.filamentsById} isOwn={isOwn} />
+        </Section>
+
+        <Section id="made-with" title="Made with this color" subtitle="Real prints from the community, and what the creator thinks this color suits.">
+          <MadeWithSection reproductions={data.reproductions} ideas={recipe.printIdeas ?? []} recipeSlug={recipe.slug} isOwn={isOwn} />
         </Section>
 
         <Section id="comments" title={`Comments (${data.comments.length})`}>
           <CommentsSection recipeId={recipe.id} authorId={recipe.authorId} comments={data.comments} />
+        </Section>
+
+        <Section id="related" title="Related colors" subtitle="Similar community colors, closest first.">
+          <RelatedColors recipeId={recipe.id} hex={recipe.resultHex} />
         </Section>
       </div>
 

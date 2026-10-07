@@ -1,364 +1,312 @@
-import { useDeferredValue, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
-import {
-  ArrowRight, Boxes, CircleCheck, Clock, FlaskConical, Flame, Repeat2, Sparkles, Target, Users,
-} from 'lucide-react'
-import type { Hex, TrustLevel } from '@/types'
-import { TrustBadge } from '@/components/recipe/badges'
-import { api } from '@/lib/api'
+/**
+ * The homepage IS the color library: a browsable feed of community-made
+ * filament colors, filtered by your own spools. No marketing hero.
+ */
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Boxes, Palette, Plus, SlidersHorizontal, Target, X } from 'lucide-react'
+import type { Hex, ID } from '@/types'
+import { api, type RecipeHit, type RecipeQuery } from '@/lib/api'
 import { useQuery } from '@/lib/hooks/useQuery'
 import { useRecipeSearch } from '@/lib/hooks/useRecipes'
 import { useInventory } from '@/lib/hooks/useInventory'
-import { useCanMakeFilter, useRecentlyViewed } from '@/lib/hooks/usePreferences'
+import { useSession } from '@/lib/hooks/useSession'
+import { useCanMakeFilter } from '@/lib/hooks/usePreferences'
 import { HUE_FAMILIES, nearestColorName } from '@/lib/color/names'
-import { readableOn, shade } from '@/lib/color/convert'
+import { normalizeHex } from '@/lib/color/convert'
+import { checkCanMake } from '@/lib/recipe/canMake'
+import { cn } from '@/lib/utils/cn'
 import { ColorPicker } from '@/components/color/ColorPicker'
-import { ColorDot, HexChip } from '@/components/color/Swatch'
-import { RecipeRail } from '@/components/recipe/RecipeCard'
-import { Avatar, Button, ButtonLink, EmptyState, SectionHeader, Switch } from '@/components/ui'
+import { ColorDot } from '@/components/color/Swatch'
+import { RecipeGrid } from '@/components/recipe/RecipeCard'
+import { Button, ButtonLink, Switch } from '@/components/ui'
 import { useInventoryPanel } from '@/components/filament/InventoryPanel'
+import { FilamentSidebar } from './FilamentSidebar'
 
-const DEFAULT_TARGET: Hex = '#C1AAD6'
+type Tab = 'for-you' | 'trending' | 'newest' | 'reproduced' | 'tested'
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'for-you', label: 'For You' },
+  { id: 'trending', label: 'Trending' },
+  { id: 'newest', label: 'Newest' },
+  { id: 'reproduced', label: 'Most Reproduced' },
+  { id: 'tested', label: 'Tested' },
+]
+
+const PAGE = 30
 
 export default function ExplorePage() {
-  const [target, setTarget] = useState<Hex>(DEFAULT_TARGET)
-  const deferredTarget = useDeferredValue(target)
+  const [params, setParams] = useSearchParams()
+  const tab = (TABS.find((t) => t.id === params.get('tab'))?.id ?? 'for-you') as Tab
+  const hue = params.get('hue') ?? ''
+  const near = normalizeHex(params.get('near') ?? '') ?? undefined
+  const [limit, setLimit] = useState(PAGE)
+  useEffect(() => setLimit(PAGE), [tab, hue, near])
+
   const inv = useInventory()
+  const { user } = useSession()
   const [onlyCanMake, setOnlyCanMake] = useCanMakeFilter()
   const canMakeWith = inv.signedIn && onlyCanMake ? [...inv.ownedIds] : undefined
+  const following = useQuery(user ? `follows:mine:${user.id}` : null, () => api.listFollowingIds())
 
-  const closest = useRecipeSearch({ targetHex: deferredTarget, sort: 'closest', limit: 10, canMakeWith })
-  const canMakeNow = useRecipeSearch(inv.signedIn && inv.ready ? { canMakeWith: [...inv.ownedIds], sort: 'trending', limit: 10 } : null)
-  const trending = useRecipeSearch({ sort: 'trending', limit: 10, canMakeWith })
-  const newest = useRecipeSearch({ sort: 'newest', limit: 10, canMakeWith })
-  const reproduced = useRecipeSearch({ sort: 'most-reproduced', limit: 10, canMakeWith })
+  const setParam = (key: string, value: string | null) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    setParams(next, { replace: true })
+  }
+
+  const query: RecipeQuery = {
+    hueFamily: hue || undefined,
+    canMakeWith,
+    targetHex: near,
+    trust: tab === 'tested' ? ['tested', 'reproduced', 'highly-reproduced'] : undefined,
+    sort: near ? 'closest' : tab === 'newest' || tab === 'tested' ? 'newest' : tab === 'reproduced' ? 'most-reproduced' : 'trending',
+    // "For You" re-ranks a larger trending window client-side.
+    limit: tab === 'for-you' && !near ? Math.max(200, limit) : limit,
+  }
+  const result = useRecipeSearch(query)
+
+  const hits = useMemo(() => {
+    const items = result.data?.items
+    if (!items) return undefined
+    if (tab !== 'for-you' || near) return items
+    return rankForYou(items, inv.ownedIds, inv.ownedFilaments, new Set(following.data ?? [])).slice(0, limit)
+  }, [result.data, tab, near, inv.ownedIds, inv.ownedFilaments, following.data, limit])
+
+  const total = result.data?.total ?? 0
+  const filtersActive = !!(hue || near || canMakeWith)
 
   return (
-    <div>
-      <Hero target={target} onTarget={setTarget} />
+    <div className="mx-auto max-w-[1800px] px-4 pt-4 pb-10 sm:px-6 lg:grid lg:grid-cols-[250px_minmax(0,1fr)] lg:gap-8">
+      <aside className="hidden lg:block" aria-label="My Filaments">
+        <div className="sticky top-20">
+          <FilamentSidebar onlyCanMake={onlyCanMake} onOnlyCanMake={setOnlyCanMake} />
+        </div>
+      </aside>
 
-      <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
-        <HueStrip />
+      <div className="min-w-0">
+        <Toolbar near={near} onNear={(h) => setParam('near', h)} onlyCanMake={onlyCanMake} onOnlyCanMake={setOnlyCanMake} />
 
-        {inv.signedIn && (
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3">
-            <Switch
-              checked={onlyCanMake}
-              onChange={setOnlyCanMake}
-              label="Only show recipes I can make"
-              description={`Filters every section using your ${inv.items.length} filaments`}
-            />
-            <InventoryButton />
+        {/* color families */}
+        <div className="scrollbar-none -mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Browse by color family">
+          <HueButton active={!hue} onClick={() => setParam('hue', null)}>All colors</HueButton>
+          {HUE_FAMILIES.map((f) => (
+            <HueButton key={f.id} active={hue === f.id} onClick={() => setParam('hue', hue === f.id ? null : f.id)} hex={f.hex}>
+              {f.label}
+            </HueButton>
+          ))}
+        </div>
+
+        {/* feed tabs */}
+        <div className="mt-4 flex items-end justify-between gap-4 border-b border-border">
+          <div role="tablist" aria-label="Sort the feed" className="scrollbar-none -mb-px flex overflow-x-auto">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                role="tab"
+                type="button"
+                aria-selected={tab === t.id && !near}
+                onClick={() => {
+                  const next = new URLSearchParams(params)
+                  if (t.id === 'for-you') next.delete('tab')
+                  else next.set('tab', t.id)
+                  next.delete('near')
+                  setParams(next, { replace: true })
+                }}
+                className={cn(
+                  'shrink-0 border-b-2 px-3 py-2.5 text-[15px] font-medium whitespace-nowrap transition-colors',
+                  tab === t.id && !near ? 'border-accent text-fg' : 'border-transparent text-fg-muted hover:text-fg',
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <span className="hidden shrink-0 pb-2.5 text-sm text-fg-muted tabular sm:block">
+            {result.data ? `${total} ${total === 1 ? 'color' : 'colors'}` : ''}
+          </span>
+        </div>
+
+        {near && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-fg-muted">Closest tested colors to</span>
+            <ColorDot hex={near} size={18} />
+            <span className="font-mono">{near}</span>
+            <span className="text-fg-muted">(≈ {nearestColorName(near)})</span>
+            <button type="button" onClick={() => setParam('near', null)} className="inline-flex items-center gap-1 text-fg-muted hover:text-fg">
+              <X className="size-4" aria-hidden /> Clear
+            </button>
+            <Link to={`/match?hex=${encodeURIComponent(near)}`} className="ml-auto font-medium text-accent hover:underline">Open in Color Matcher</Link>
           </div>
         )}
 
-        <Section
-          icon={<Target className="size-4" />}
-          title={<>Closest to <span className="inline-flex translate-y-0.5 items-center gap-1.5"><ColorDot hex={deferredTarget} size={16} /> <span className="font-mono text-base">{deferredTarget}</span></span></>}
-          subtitle={`Community-tested swatches ranked by CIEDE2000 (≈ ${nearestColorName(deferredTarget)})`}
-          seeAll={`/match?hex=${encodeURIComponent(deferredTarget)}`}
-          seeAllLabel="Open in Color Matcher"
-        >
-          <RailOrEmpty result={closest} target={deferredTarget} emptyText="No recipes you can make are near this color yet." />
-        </Section>
+        <div className="mt-4">
+          {hits && hits.length === 0 ? (
+            <FeedEmpty filtersActive={filtersActive} onClear={() => { setParams(new URLSearchParams(), { replace: true }); setOnlyCanMake(false) }} onlyCanMake={!!canMakeWith} />
+          ) : (
+            <RecipeGrid hits={hits} loading={result.loading} target={near} />
+          )}
+        </div>
 
-        {inv.signedIn && !onlyCanMake && (
-          <Section
-            icon={<CircleCheck className="size-4" />}
-            title="You can make right now"
-            subtitle="Every filament in these recipes is already on your shelf"
-            seeAll="/search?canmake=1"
-          >
-            {canMakeNow.data && canMakeNow.data.items.length === 0 ? (
-              <EmptyState
-                icon={<Boxes className="size-5" />}
-                title="Nothing fully makeable yet"
-                description="Add a few more filaments (a white, a black, and a primary or two) to unlock many recipes."
-                action={<InventoryButton variant="primary" label="Add filaments" />}
-              />
-            ) : (
-              <RecipeRail hits={canMakeNow.data?.items} loading={!canMakeNow.data} />
-            )}
-          </Section>
+        {hits && total > hits.length && hits.length >= limit && (
+          <div className="mt-6 flex justify-center">
+            <Button variant="outline" onClick={() => setLimit((l) => l + PAGE)} loading={result.fetching}>Show more colors</Button>
+          </div>
         )}
-
-        <Section icon={<Flame className="size-4" />} title="Trending mixes" subtitle="Most saved and reproduced this month" seeAll="/search?sort=trending">
-          <RailOrEmpty result={trending} />
-        </Section>
-
-        <Section icon={<Clock className="size-4" />} title="Recently tested" subtitle="Fresh swatches from the community" seeAll="/search?sort=newest">
-          <RailOrEmpty result={newest} />
-        </Section>
-
-        <Section icon={<Repeat2 className="size-4" />} title="Most reproduced" subtitle="Recipes other makers have independently confirmed" seeAll="/search?sort=most-reproduced">
-          <RailOrEmpty result={reproduced} />
-        </Section>
-
-        <RecentlyViewed />
-        <TopCreators />
-        <HowItWorks />
       </div>
     </div>
   )
 }
 
-function Hero({ target, onTarget }: { target: Hex; onTarget: (h: Hex) => void }) {
+/**
+ * "For You": trending order, nudged toward colors you can make (or are one
+ * spool away from) and colors from makers you follow.
+ */
+function rankForYou(items: RecipeHit[], owned: Set<ID>, ownedFilaments: Parameters<typeof checkCanMake>[3], follows: Set<ID>): RecipeHit[] {
+  if (owned.size === 0 && follows.size === 0) return items
+  return items
+    .map((h, i) => {
+      const cm = checkCanMake(h.composition, new Map(h.filaments.map((f) => [f.id, f])), owned, ownedFilaments)
+      const boost = (cm.canMake ? 12 : cm.missing.length === 1 ? 5 : 0) + (follows.has(h.recipe.authorId) ? 8 : 0)
+      return { h, score: i - boost }
+    })
+    .sort((a, b) => a.score - b.score)
+    .map((x) => x.h)
+}
+
+function Toolbar({ near, onNear, onlyCanMake, onOnlyCanMake }: { near?: Hex; onNear: (hex: string | null) => void; onlyCanMake: boolean; onOnlyCanMake: (v: boolean) => void }) {
   const navigate = useNavigate()
-  const fg = readableOn(target)
-  return (
-    <section className="relative overflow-hidden border-b border-border bg-surface">
-      {/* animated color wash driven by the chosen target */}
-      <div
-        aria-hidden
-        className="color-transition pointer-events-none absolute -top-40 -right-40 size-[620px] rounded-full opacity-35 blur-3xl dark:opacity-25"
-        style={{ background: `radial-gradient(circle, ${target}, transparent 65%)` }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.5] dark:opacity-[0.25]"
-        style={{
-          backgroundImage: 'linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)',
-          backgroundSize: '48px 48px',
-          maskImage: 'radial-gradient(ellipse at 30% 40%, black, transparent 70%)',
-        }}
-      />
-      <div className="relative mx-auto grid max-w-[1400px] items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.15fr_1fr] lg:py-20">
-        <div>
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-fg-muted backdrop-blur">
-            <FlaskConical className="size-3.5 text-accent" aria-hidden />
-            Physically tested · community reproduced
-          </div>
-          <h1 className="text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
-            Mix a color.
-            <br />
-            <span className="relative">
-              Share the{' '}
-              <span className="color-transition relative inline-block" style={{ color: shade(target, -8) }}>
-                recipe.
-                <span aria-hidden className="color-transition absolute inset-x-0 -bottom-1 h-1.5 rounded-full" style={{ background: target }} />
-              </span>
-            </span>
-          </h1>
-          <p className="mt-6 max-w-xl text-lg text-fg-muted text-pretty">
-            Discover custom filament colors that real makers have physically mixed, printed and photographed, and
-            filter them to the ones you can make from the spools already on your shelf.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <ButtonLink to="/search" size="lg" variant="secondary">Browse recipes</ButtonLink>
-            <ButtonLink to="/create" size="lg" variant="outline" icon={<Sparkles className="size-4" />}>Share a recipe</ButtonLink>
-          </div>
-          <dl className="mt-10 grid max-w-md grid-cols-3 gap-4 text-sm">
-            {[['Tested', 'printed by the creator'], ['Reproduced', 'confirmed by others'], ['ΔE00', 'perceptual matching']].map(([t, d]) => (
-              <div key={t}>
-                <dt className="font-semibold">{t}</dt>
-                <dd className="text-xs text-fg-muted">{d}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-
-        <div className="relative rounded-2xl border border-border bg-surface/90 p-4 shadow-lg backdrop-blur sm:p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">What color are you after?</h2>
-              <p className="text-xs text-fg-muted">Pick visually, type a HEX, or search by name</p>
-            </div>
-            <HexChip hex={target} />
-          </div>
-          <div
-            className="color-transition mb-4 flex h-20 items-end justify-between rounded-xl p-3 shadow-[inset_0_0_0_1px_rgb(0_0_0/0.06)]"
-            style={{ background: target, color: fg }}
-          >
-            <span className="text-xs font-semibold tracking-wide uppercase opacity-80">Your target</span>
-            <span className="text-sm font-medium">≈ {nearestColorName(target)}</span>
-          </div>
-          <ColorPicker value={target} onChange={onTarget} compact />
-          <Button
-            size="lg"
-            className="mt-4 w-full"
-            iconRight={<ArrowRight className="size-4" />}
-            onClick={() => navigate(`/match?hex=${encodeURIComponent(target)}`)}
-          >
-            Find tested recipes
-          </Button>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function HueStrip() {
-  return (
-    <nav aria-label="Browse by color family" className="scrollbar-none -mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-      {HUE_FAMILIES.map((h) => (
-        <Link
-          key={h.id}
-          to={`/search?hue=${h.id}`}
-          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-border bg-surface pr-3.5 pl-1.5 text-sm font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
-        >
-          <ColorDot hex={h.hex} size={24} />
-          {h.label}
-        </Link>
-      ))}
-    </nav>
-  )
-}
-
-function Section({
-  title, subtitle, icon, seeAll, seeAllLabel = 'See all', children,
-}: {
-  title: React.ReactNode
-  subtitle?: string
-  icon?: React.ReactNode
-  seeAll?: string
-  seeAllLabel?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="mt-12">
-      <SectionHeader
-        title={title}
-        subtitle={subtitle}
-        icon={icon}
-        action={
-          seeAll && (
-            <Link to={seeAll} className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">
-              <span className="hidden sm:inline">{seeAllLabel}</span>
-              <span className="sm:hidden">All</span>
-              <ArrowRight className="size-4" aria-hidden />
-            </Link>
-          )
-        }
-      />
-      {children}
-    </section>
-  )
-}
-
-function RailOrEmpty({
-  result, target, emptyText = 'No recipes match your filter yet.',
-}: {
-  result: ReturnType<typeof useRecipeSearch>
-  target?: string
-  emptyText?: string
-}) {
-  if (result.data && result.data.items.length === 0) {
-    return <p className="rounded-xl border border-dashed border-border-strong px-4 py-8 text-center text-sm text-fg-muted">{emptyText}</p>
-  }
-  return <RecipeRail hits={result.data?.items} loading={!result.data} target={target} />
-}
-
-function InventoryButton({ variant = 'outline', label = 'Manage filaments' }: { variant?: 'outline' | 'primary'; label?: string }) {
+  const inv = useInventory()
   const panel = useInventoryPanel()
+  const [q, setQ] = useState('')
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const text = q.trim()
+    if (!text) return
+    const hex = /^#?[0-9a-f]{6}$/i.test(text) ? normalizeHex(text) : null
+    if (hex) onNear(hex)
+    else navigate(`/search?q=${encodeURIComponent(text)}`)
+  }
+
   return (
-    <Button size="sm" variant={variant} icon={<Boxes className="size-4" />} onClick={() => panel.open(variant === 'primary' ? 'add' : 'mine')}>
-      {label}
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <form role="search" onSubmit={submit} className="relative min-w-0 flex-1 basis-full sm:basis-64">
+        <label htmlFor="feed-search" className="sr-only">Search colors, HEX, filaments or makers</label>
+        <input
+          id="feed-search"
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search colors: lavender, #C1AAD6, Cobalt Blue, a maker…"
+          className="h-10 w-full rounded-md border border-border-strong bg-surface px-3 text-[15px] placeholder:text-fg-subtle focus:border-accent focus:ring-3 focus:ring-[var(--ring)] focus:outline-none"
+        />
+      </form>
+      <ColorLookup near={near} onNear={onNear} />
+      <button
+        type="button"
+        onClick={() => panel.open()}
+        className="inline-flex h-10 items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-sm font-medium hover:bg-surface-2 lg:hidden"
+      >
+        <Boxes className="size-4" aria-hidden /> <span className="sm:hidden">Filaments</span><span className="hidden sm:inline">My Filaments</span>{inv.signedIn && <span className="text-fg-muted tabular">{inv.items.length}</span>}
+      </button>
+      {inv.signedIn && (
+        <div className="flex h-10 items-center rounded-md border border-border-strong bg-surface px-2.5 lg:hidden">
+          <Switch size="sm" checked={onlyCanMake} onChange={onOnlyCanMake} label={<span className="text-sm">Can make</span>} />
+        </div>
+      )}
+      <ButtonLink to="/create" icon={<Plus className="size-4" />} className="hidden h-10 rounded-md sm:inline-flex">Create Recipe</ButtonLink>
+    </div>
   )
 }
 
-function RecentlyViewed() {
-  const recent = useRecentlyViewed()
-  if (recent.items.length === 0) return null
+/** Compact "What color are you looking for?" entry point. The full tool lives on /match. */
+function ColorLookup({ near, onNear }: { near?: Hex; onNear: (hex: string | null) => void }) {
+  const [open, setOpen] = useState(false)
+  const [hex, setHex] = useState<Hex>(near ?? '#C1AAD6')
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [open])
+
   return (
-    <section className="mt-12">
-      <SectionHeader
-        title="Recently viewed"
-        icon={<Clock className="size-4" />}
-        action={<button type="button" onClick={recent.clear} className="text-sm text-fg-muted hover:text-fg">Clear</button>}
-      />
-      <div className="scrollbar-none -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-        {recent.items.map((r) => (
-          <Link key={r.id} to={`/r/${r.slug}`} className="group w-32 shrink-0">
-            <div
-              className="color-transition aspect-square rounded-xl shadow-[inset_0_0_0_1px_rgb(0_0_0/0.06)] transition-transform group-hover:-translate-y-0.5"
-              style={{ background: r.hex }}
-            />
-            <div className="mt-1.5 truncate text-sm font-medium group-hover:underline">{r.name}</div>
-            <div className="font-mono text-xs text-fg-muted">{r.hex}</div>
-          </Link>
-        ))}
-      </div>
-    </section>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex h-10 items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-sm font-medium hover:bg-surface-2 sm:px-3"
+      >
+        {near ? <ColorDot hex={near} size={16} /> : <Palette className="size-4" aria-hidden />}
+        <span className="sm:hidden">Color</span><span className="hidden sm:inline">Find by color</span>
+      </button>
+      {open && (
+        <div role="dialog" aria-label="Find colors by target" className="absolute right-0 z-30 mt-1.5 w-[300px] animate-pop rounded-lg border border-border bg-surface p-3 shadow-lg sm:left-0 sm:right-auto">
+          <div className="mb-2 text-sm font-semibold">What color are you looking for?</div>
+          <ColorPicker value={hex} onChange={setHex} compact />
+          <div className="mt-3 flex gap-2">
+            <Button
+              className="flex-1"
+              size="sm"
+              onClick={() => {
+                onNear(hex)
+                setOpen(false)
+              }}
+            >
+              Show closest colors
+            </Button>
+            <ButtonLink to={`/match?hex=${encodeURIComponent(hex)}`} size="sm" variant="outline" icon={<Target className="size-3.5" />}>Matcher</ButtonLink>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
-function TopCreators() {
-  const { data } = useQuery('creators:top', () => api.listCreators(8))
-  if (!data?.length) return null
+function HueButton({ active, onClick, hex, children }: { active: boolean; onClick: () => void; hex?: Hex; children: React.ReactNode }) {
   return (
-    <section className="mt-12">
-      <SectionHeader title="Top creators" subtitle="Makers whose recipes others reproduce most" icon={<Users className="size-4" />} />
-      <div className="scrollbar-none -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-        {data.map((c) => (
-          <Link
-            key={c.id}
-            to={`/u/${c.username}`}
-            className="flex w-56 shrink-0 items-center gap-3 rounded-xl border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:shadow-sm"
-          >
-            <Avatar profile={c} size="lg" />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">{c.displayName}</div>
-              <div className="truncate text-xs text-fg-muted">@{c.username}</div>
-              <div className="mt-1 text-xs text-fg-muted tabular">
-                {c.recipeCount} recipes · {c.reproductionsReceived} repros
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </section>
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors',
+        active ? 'border-fg bg-fg text-bg' : 'border-border bg-surface text-fg-muted hover:border-border-strong hover:text-fg',
+      )}
+    >
+      {hex && <ColorDot hex={hex} size={12} />}
+      {children}
+    </button>
   )
 }
 
-function HowItWorks() {
-  const steps = [
-    { n: '01', icon: Boxes, title: 'Own', body: 'Add the spools on your shelf. Every recipe then tells you whether you can make it, or what you’re missing.' },
-    { n: '02', icon: FlaskConical, title: 'Mix', body: 'Follow exact multi-stage ratios with a gram calculator and a step-by-step “Make this color” mode.' },
-    { n: '03', icon: Repeat2, title: 'Share & reproduce', body: 'Post your printed swatch. When others reproduce it and get a close match, the recipe earns trust.' },
-  ]
-  const ladder: { level: TrustLevel; note: string }[] = [
-    { level: 'calculated', note: 'math only' },
-    { level: 'tested', note: '1 printed swatch' },
-    { level: 'reproduced', note: '≥1 close match' },
-    { level: 'highly-reproduced', note: '5+ and 80% agree' },
-  ]
+function FeedEmpty({ filtersActive, onClear, onlyCanMake }: { filtersActive: boolean; onClear: () => void; onlyCanMake: boolean }) {
+  if (filtersActive) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 text-sm">
+        <SlidersHorizontal className="size-4 text-fg-subtle" aria-hidden />
+        <span className="text-fg-muted">
+          No colors match these filters{onlyCanMake ? ' with your current filaments' : ''}.
+        </span>
+        <button type="button" onClick={onClear} className="font-medium text-accent hover:underline">Clear filters</button>
+      </div>
+    )
+  }
   return (
-    <section className="mt-16 rounded-2xl border border-border bg-surface p-6 sm:p-10">
-      <div className="max-w-2xl">
-        <div className="text-xs font-semibold tracking-wider text-accent uppercase">How it works</div>
-        <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">Real filament beats math.</h2>
-        <p className="mt-2 text-fg-muted">
-          Melted plastic doesn’t mix like RGB values. SpoolShare is built on printed swatches, and confidence grows only as
-          other makers reproduce them.
-        </p>
-      </div>
-      <ol className="mt-8 grid gap-4 md:grid-cols-3">
-        {steps.map((s) => (
-          <li key={s.n} className="rounded-xl border border-border bg-bg p-5">
-            <div className="flex items-center justify-between">
-              <span className="grid size-10 place-items-center rounded-lg bg-accent-soft text-accent-soft-fg"><s.icon className="size-5" aria-hidden /></span>
-              <span className="font-mono text-xs text-fg-subtle">{s.n}</span>
-            </div>
-            <h3 className="mt-4 font-semibold">{s.title}</h3>
-            <p className="mt-1 text-sm text-fg-muted">{s.body}</p>
-          </li>
-        ))}
-      </ol>
-      <div className="mt-8">
-        <h3 className="text-sm font-semibold">The trust ladder</h3>
-        <ol className="mt-3 flex flex-wrap items-center gap-2">
-          {ladder.map((l, i) => (
-            <li key={l.level} className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5">
-                <TrustBadge level={l.level} size="md" />
-                <span className="text-xs text-fg-subtle">· {l.note}</span>
-              </span>
-              {i < ladder.length - 1 && <ArrowRight className="size-4 text-fg-subtle" aria-hidden />}
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 text-sm">
+      <Palette className="size-4 text-fg-subtle" aria-hidden />
+      <span className="text-fg-muted">No colors here yet. Be the first to share one.</span>
+      <Link to="/create" className="font-medium text-accent hover:underline">Create a recipe</Link>
+    </div>
   )
 }

@@ -24,6 +24,7 @@ export function ResultsSection({
   filamentsById: Record<ID, FilamentView>
   isOwn: boolean
 }) {
+  const calc = !!recipe.isExample
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? reproductions : reproductions.slice(0, 6)
 
@@ -32,13 +33,17 @@ export function ResultsSection({
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="overflow-hidden">
           <div className="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs font-semibold tracking-wide text-fg-subtle uppercase">
-            <FlaskConical className="size-3.5" aria-hidden /> Original result
+            <FlaskConical className="size-3.5" aria-hidden /> {calc ? 'Calculated preview' : 'Creator’s printed result'}
           </div>
           <div className="flex items-center gap-4 p-4">
             <SwatchVisual hex={recipe.resultHex} photo={recipe.photos[0]} finish={recipe.finish} className="size-20 shrink-0" rounded="rounded-lg" />
             <div className="min-w-0">
               <HexChip hex={recipe.resultHex} size="sm" />
-              <p className="mt-1.5 text-sm text-fg-muted">Measured by the creator from their printed swatch.</p>
+              <p className="mt-1.5 text-sm text-fg-muted">
+                {calc
+                  ? 'An official example. This color was calculated from the filament colors, not printed. The first community print becomes the real reference.'
+                  : 'Photographed by the creator from their printed swatch.'}
+              </p>
             </div>
           </div>
         </Card>
@@ -51,7 +56,7 @@ export function ResultsSection({
               <div className="color-transition size-20 shrink-0 rounded-lg border border-border" style={{ background: stats.averageHex }} role="img" aria-label={`Community average ${stats.averageHex}`} />
               <div className="min-w-0">
                 <HexChip hex={stats.averageHex} size="sm" />
-                <p className="mt-1.5 text-sm text-fg-muted">Average of {plural(stats.count + 1, 'result')} (original included), averaged in CIELAB.</p>
+                <p className="mt-1.5 text-sm text-fg-muted">{calc ? `Average of ${plural(stats.count, 'printed result')}` : `Average of ${plural(stats.count + 1, 'result')} (original included)`}, averaged in CIELAB.</p>
               </div>
             </div>
           ) : (
@@ -72,7 +77,7 @@ export function ResultsSection({
           <div className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-border bg-surface p-4 sm:grid-cols-3 lg:grid-cols-5">
             <Stat label="Reproductions" value={stats.count} />
             <Stat label="Close matches" value={`${stats.closeCount} / ${stats.count}`} hint={`ΔE00 ≤ ${CLOSE_MATCH_THRESHOLD}`} />
-            <Stat label="Mean ΔE00" value={stats.meanDeltaE?.toFixed(2) ?? '—'} hint="vs. original" />
+            <Stat label="Mean ΔE00" value={stats.meanDeltaE?.toFixed(2) ?? '—'} hint={calc ? 'vs. first print' : 'vs. original'} />
             <Stat label="Consistency" value={stats.spread != null ? `±${stats.spread.toFixed(1)}` : '—'} hint={consistencyLabel(stats.spread)} />
             <Stat label="Avg. accuracy rating" value={stats.averageRating != null ? <RatingStars value={stats.averageRating} className="text-base" /> : '—'} />
           </div>
@@ -81,12 +86,12 @@ export function ResultsSection({
             <Card className="p-4">
               <h3 className="text-sm font-semibold">Where results landed</h3>
               <p className="mb-2 text-xs text-fg-muted">Distance from center is ΔE00; direction shows the shift in hue.</p>
-              <ColorScatter original={recipe.resultHex} reproductions={reproductions} average={stats.averageHex} />
+              <ColorScatter original={recipe.resultHex} originalLabel={calc ? 'Preview' : 'Original'} reproductions={reproductions} average={stats.averageHex} />
             </Card>
             <Card className="p-4">
-              <h3 className="text-sm font-semibold">Original vs. community average</h3>
+              <h3 className="text-sm font-semibold">{calc ? 'Calculated preview' : 'Original'} vs. community average</h3>
               <p className="mb-3 text-xs text-fg-muted">Drag the handle to compare.</p>
-              <CompareSlider left={recipe.resultHex} right={stats.averageHex!} leftLabel="Original" rightLabel="Community avg." height={200} />
+              <CompareSlider left={recipe.resultHex} right={stats.averageHex!} leftLabel={calc ? 'Calculated' : 'Original'} rightLabel="Community avg." height={200} />
               <DeltaEMeter a={recipe.resultHex} b={stats.averageHex!} className="mt-3" />
             </Card>
           </div>
@@ -99,7 +104,7 @@ export function ResultsSection({
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="list">
               {shown.map((r) => (
                 <li key={r.id}>
-                  <ReproductionCard rep={r} original={recipe.resultHex} filamentsById={filamentsById} />
+                  <ReproductionCard rep={r} original={recipe.resultHex} originalLabel={calc ? 'Calculated preview' : 'Original'} filamentsById={filamentsById} />
                 </li>
               ))}
             </ul>
@@ -125,11 +130,11 @@ function consistencyLabel(spread: number | null) {
   return 'High variation'
 }
 
-function ReproductionCard({ rep, original, filamentsById }: { rep: ReproductionView; original: Hex; filamentsById: Record<ID, FilamentView> }) {
+function ReproductionCard({ rep, original, originalLabel, filamentsById }: { rep: ReproductionView; original: Hex; originalLabel: string; filamentsById: Record<ID, FilamentView> }) {
   return (
     <Card className="flex h-full flex-col overflow-hidden">
       <div className="flex h-20">
-        <div className="flex-1" style={{ background: original }} title={`Original ${original}`} />
+        <div className="flex-1" style={{ background: original }} title={`${originalLabel} ${original}`} />
         {rep.photos[0] ? (
           <img src={rep.photos[0].url} alt={rep.photos[0].alt} className="h-full w-2/3 object-cover" />
         ) : (
@@ -175,7 +180,7 @@ function ReproductionCard({ rep, original, filamentsById }: { rep: ReproductionV
  * Polar plot: each reproduction sits at radius = ΔE00 from the original, in the
  * direction of its a*b* (hue/chroma) shift. Rings mark ΔE 2, 5 and 10.
  */
-function ColorScatter({ original, reproductions, average }: { original: Hex; reproductions: ReproductionView[]; average: Hex | null }) {
+function ColorScatter({ original, originalLabel, reproductions, average }: { original: Hex; originalLabel: string; reproductions: ReproductionView[]; average: Hex | null }) {
   const size = 260
   const c = size / 2
   const maxDe = Math.max(12, ...reproductions.map((r) => r.deltaE)) * 1.08
@@ -222,7 +227,7 @@ function ColorScatter({ original, reproductions, average }: { original: Hex; rep
           </g>
         )}
         <circle cx={c} cy={c} r={10} fill={original} stroke="var(--fg)" strokeWidth={2} />
-        <text x={c} y={c + 24} textAnchor="middle" className="fill-fg text-[10px] font-semibold">Original</text>
+        <text x={c} y={c + 24} textAnchor="middle" className="fill-fg text-[10px] font-semibold">{originalLabel}</text>
       </svg>
     </div>
   )

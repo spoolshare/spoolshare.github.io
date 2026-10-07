@@ -1,3 +1,4 @@
+import { BAMBU_PRINTERS } from '@/types'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ArrowLeft, Check, LogIn, Replace, X } from 'lucide-react'
@@ -36,6 +37,7 @@ export default function ReproducePage() {
   const navigate = useNavigate()
 
   const [photos, setPhotos] = useState<Photo[]>([])
+  const [objectPhotos, setObjectPhotos] = useState<Photo[]>([])
   const [hex, setHex] = useState<Hex | null>(null)
   const [printer, setPrinter] = useState('')
   const [material, setMaterial] = useState<Material>('PLA')
@@ -88,7 +90,7 @@ export default function ReproducePage() {
   }
 
   const current = hex ?? recipe.resultHex
-  const missingAlt = photos.some((p) => !p.alt.trim())
+  const missingAlt = [...photos, ...objectPhotos].some((p) => !p.alt.trim())
   const canSubmit = rating > 0 && !missingAlt && !submitting
 
   const submit = async (e: React.FormEvent) => {
@@ -111,6 +113,7 @@ export default function ReproducePage() {
           .map(([originalFilamentId, s]) => ({ originalFilamentId, usedFilamentId: s.mode === 'catalog' ? s.filament!.id : undefined, usedLabel: s.mode === 'text' ? s.label.trim() : undefined })),
         notes: notes.trim() || undefined,
         accuracyRating: rating,
+        objectPhotos,
       })
       invalidate('reproductions', 'recipe', 'recipes')
       toast(<>Thanks! Your reproduction of <b>{recipe.name}</b> is live.</>)
@@ -203,8 +206,10 @@ export default function ReproducePage() {
         <FormSection n={4} title="Print details">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Printer" optional htmlFor="rep-printer">
-              <Input id="rep-printer" value={printer} onChange={(e) => setPrinter(e.target.value)} placeholder="e.g. Bambu Lab P1S" list="rep-printers" />
-              <datalist id="rep-printers">{user.printers.map((p) => <option key={p} value={p} />)}</datalist>
+              <Select id="rep-printer" value={printer} onChange={(e) => setPrinter(e.target.value)}>
+                <option value="">Not specified</option>
+                {BAMBU_PRINTERS.map((p) => <option key={p} value={p}>{p}{user.printers.includes(p) ? ' (yours)' : ''}</option>)}
+              </Select>
             </Field>
             <Field label="Material" htmlFor="rep-material">
               <Select id="rep-material" value={material} onChange={(e) => setMaterial(e.target.value as Material)}>
@@ -246,6 +251,14 @@ export default function ReproducePage() {
 
         <FormSection n={6} title="Notes">
           <Textarea aria-label="Notes" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Purge length, drying, lighting, anything that might explain differences…" />
+        </FormSection>
+
+        <FormSection n={7} title="What did you print with it?">
+          <p className="mb-3 text-sm text-fg-muted">
+            Optional. Photos of real objects (flowers, a dragon, a planter…) show how the color looks on different shapes, textures and lighting.
+            They appear under <b>Made with this color</b> on the recipe.
+          </p>
+          <PhotoUploader photos={objectPhotos} onChange={setObjectPhotos} max={6} showTips={false} emptyLabel="Add a print photo" defaultAlt={`Object printed in ${recipe.name}`} />
         </FormSection>
 
         {error && <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}

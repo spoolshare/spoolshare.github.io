@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router'
 import {
-  Bell, Bookmark, Boxes, Compass, LogOut, Monitor, Moon, PlusCircle, Settings, Sun, Target, User, Users,
+  Bell, Bookmark, Boxes, Compass, Flag, LogOut, Monitor, Moon, PlusCircle, Settings, Sun, Target, User, Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { useSession } from '@/lib/hooks/useSession'
-import { useTheme } from '@/lib/hooks/usePreferences'
 import { useInventory } from '@/lib/hooks/useInventory'
+import { useTheme } from '@/lib/hooks/usePreferences'
 import { useQuery } from '@/lib/hooks/useQuery'
 import { api } from '@/lib/api'
 import { normalizeHex } from '@/lib/color/convert'
-import { Avatar, ButtonLink, IconButton, Kbd, Menu } from '@/components/ui'
+import { Avatar, ButtonLink, Kbd, Menu } from '@/components/ui'
 import { useInventoryPanel } from '@/components/filament/InventoryPanel'
 import { Logo } from './Logo'
 import { Search } from 'lucide-react'
@@ -31,7 +31,7 @@ export function TopNav() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface/85 backdrop-blur-md supports-[backdrop-filter]:bg-surface/75">
-      <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 px-4 sm:px-6">
+      <div className="mx-auto flex h-16 max-w-[1800px] items-center gap-3 px-4 sm:px-6">
         <Logo className="mr-2" />
 
         <nav aria-label="Main" className="hidden items-center gap-0.5 lg:flex">
@@ -42,7 +42,7 @@ export function TopNav() {
               end={n.end}
               className={({ isActive }) =>
                 cn(
-                  'relative rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'relative rounded-md px-3 py-2 text-[15px] font-medium transition-colors',
                   isActive ? 'text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
                 )
               }
@@ -93,8 +93,6 @@ export function TopNav() {
             </NavLink>
           )}
 
-          <ThemeToggle />
-
           {user ? <UserMenu /> : (
             <ButtonLink to="/signin" size="sm" variant="secondary" className="ml-1">Sign in</ButtonLink>
           )}
@@ -104,20 +102,12 @@ export function TopNav() {
   )
 }
 
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
-  const next = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light'
-  const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
-  return (
-    <IconButton label={`Theme: ${theme}. Switch to ${next}`} onClick={() => setTheme(next)} className="hidden sm:inline-flex">
-      <Icon className="size-[18px]" />
-    </IconButton>
-  )
-}
-
 function UserMenu() {
   const { user, signOut } = useSession()
   const navigate = useNavigate()
+  const { theme, setTheme } = useTheme()
+  const nextTheme = theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system'
+  const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
   if (!user) return null
   return (
     <Menu
@@ -141,7 +131,9 @@ function UserMenu() {
         { label: 'Saved recipes', icon: <Bookmark className="size-4" />, onSelect: () => navigate('/saved') },
         { label: 'My Filaments', icon: <Boxes className="size-4" />, onSelect: () => navigate('/filaments') },
         { label: 'Settings', icon: <Settings className="size-4" />, onSelect: () => navigate('/settings') },
+        { label: `Appearance: ${theme[0].toUpperCase() + theme.slice(1)}`, icon: <ThemeIcon className="size-4" />, onSelect: () => setTheme(nextTheme) },
         ...(user.role === 'admin' ? [{ label: 'Members (admin)', icon: <Users className="size-4" />, onSelect: () => navigate('/admin/members') }] : []),
+        ...(user.role === 'admin' || user.role === 'moderator' ? [{ label: 'Reports (admin)', icon: <Flag className="size-4" />, onSelect: () => navigate('/admin/reports') }] : []),
         { divider: true, label: '' },
         { label: 'Sign out', icon: <LogOut className="size-4" />, onSelect: async () => { await signOut(); navigate('/') } },
       ]}
@@ -190,8 +182,8 @@ function GlobalSearch({ className }: { className?: string }) {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         aria-label="Search recipes, colors, HEX, brands"
-        placeholder="Search “lavender”, #C1AAD6, Polymaker…"
-        className="h-10 w-full rounded-lg border border-border bg-surface-2 pr-10 pl-9 text-sm placeholder:text-fg-subtle focus:border-accent focus:bg-surface focus:ring-3 focus:ring-[var(--ring)] focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+        placeholder="Search colors, #C1AAD6, Bambu filaments, makers…"
+        className="h-10 w-full rounded-md border border-border bg-surface-2 pr-10 pl-9 text-[15px] placeholder:text-fg-subtle focus:border-accent focus:bg-surface focus:ring-3 focus:ring-[var(--ring)] focus:outline-none [&::-webkit-search-cancel-button]:hidden"
       />
       <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2">
         <Kbd>/</Kbd>

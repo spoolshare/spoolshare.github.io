@@ -2,12 +2,35 @@ import type { Difficulty, Recipe, Reproduction, ReproductionStats, TrustLevel } 
 import { averageLab, CLOSE_MATCH_THRESHOLD, deltaE, deltaSpread } from '@/lib/color/deltaE'
 import { recipeComposition } from './composition'
 
-export function reproductionStats(recipe: Pick<Recipe, 'resultHex'>, reproductions: Reproduction[]): ReproductionStats {
-  if (reproductions.length === 0) {
-    return { count: 0, closeCount: 0, meanDeltaE: null, averageHex: null, spread: null, averageRating: null }
+/**
+ * Example recipes start from a CALCULATED color, never a printed one, so
+ * their reference is the first physical reproduction instead, and the
+ * calculated color is never averaged in as if it were a real result.
+ */
+export function referenceHex(recipe: Pick<Recipe, 'resultHex' | 'isExample'>, reproductions: Reproduction[]): string | null {
+  if (!recipe.isExample) return recipe.resultHex
+  const first = [...reproductions].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))[0]
+  return first?.resultHex ?? null
+}
+
+/** Human label for a recipe's own color, e.g. on the detail page. */
+export function resultColorLabel(recipe: Pick<Recipe, 'isExample'>): string {
+  return recipe.isExample ? 'Calculated preview' : 'Printed result'
+}
+
+export function reproductionStats(recipe: Pick<Recipe, 'resultHex' | 'isExample'>, reproductions: Reproduction[]): ReproductionStats {
+  const ref = referenceHex(recipe, reproductions)
+  if (reproductions.length === 0 || !ref) {
+    return { count: reproductions.length, closeCount: 0, meanDeltaE: null, averageHex: null, spread: null, averageRating: null }
   }
-  const des = reproductions.map((r) => deltaE(r.resultHex, recipe.resultHex))
-  const all = [recipe.resultHex, ...reproductions.map((r) => r.resultHex)]
+  const physical = reproductions.map((r) => r.resultHex)
+  // For examples the first reproduction IS the reference, so compare the others against it.
+  const compared = recipe.isExample ? physical.slice(1) : physical
+  const des = compared.map((h) => deltaE(h, ref))
+  const all = recipe.isExample ? physical : [recipe.resultHex, ...physical]
+  if (des.length === 0) {
+    return { count: reproductions.length, closeCount: 0, meanDeltaE: null, averageHex: averageLab(all), spread: null, averageRating: reproductions.reduce((a, r) => a + r.accuracyRating, 0) / reproductions.length }
+  }
   return {
     count: reproductions.length,
     closeCount: des.filter((d) => d <= CLOSE_MATCH_THRESHOLD).length,
@@ -23,7 +46,8 @@ export function reproductionStats(recipe: Pick<Recipe, 'resultHex'>, reproductio
  * from independent reproductions that land close to the original.
  */
 export function trustLevel(stats: ReproductionStats, recipe?: Pick<Recipe, 'isExample'>): TrustLevel {
-  if (recipe?.isExample && stats.closeCount === 0) return 'calculated'
+  // An example becomes Tested once someone physically prints it, Reproduced once a second print agrees.
+  if (recipe?.isExample && stats.count === 0) return 'calculated'
   if (stats.closeCount >= 5 && stats.closeCount / stats.count >= 0.8) return 'highly-reproduced'
   if (stats.closeCount >= 1) return 'reproduced'
   return 'tested'

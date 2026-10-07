@@ -76,6 +76,7 @@ export function runRecipeSearch(all: RecipeSummary[], q: RecipeQuery): Page<Reci
   hits = hits.filter((h) => {
     const r = h.recipe
     if (q.authorId && r.authorId !== q.authorId) return false
+    if (q.authorIds && !q.authorIds.includes(r.authorId)) return false
     if (q.materials?.length && !q.materials.includes(r.material)) return false
     if (q.manufacturerIds?.length && !h.filaments.some((f) => q.manufacturerIds!.includes(f.manufacturerId))) return false
     if (q.minStages && r.stages.length < q.minStages) return false

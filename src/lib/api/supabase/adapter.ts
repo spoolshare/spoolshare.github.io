@@ -15,7 +15,7 @@ import type {
   Reproduction, Stage,
 } from '@/types'
 import type {
-  CommentView, InventoryEntry, MemberRow, NotificationView, ProfileDetail, RecipeDetail, RecipeDraftInput, ReproductionView,
+  CommentView, InventoryEntry, MemberRow, NotificationView, ReportView, ProfileDetail, RecipeDetail, RecipeDraftInput, ReproductionView,
   SpoolShareApi,
 } from '../types'
 import { ACHIEVEMENTS, runRecipeSearch, summarize, type SummaryContext } from '../shared'
@@ -36,6 +36,7 @@ function check(res: { data?: unknown; error: { message: string } | null }): Row 
 }
 
 function friendly(msg: string): string {
+  if (/banned/i.test(msg)) return 'This account has been disabled by an administrator.'
   if (/Invalid login credentials/i.test(msg)) return 'That email and password don’t match an account.'
   if (/Email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox for the link.'
   if (/User already registered/i.test(msg)) return 'An account with that email already exists.'
@@ -58,6 +59,7 @@ const toProfile = (r: Row): Profile => ({
   inventoryVisibility: r.inventory_visibility ?? 'public',
   joinedAt: r.joined_at,
   role: r.role ?? 'member',
+  disabled: r.disabled ?? false,
 })
 
 const toStage = (r: Row): Stage => ({
@@ -98,6 +100,7 @@ const toRecipe = (r: Row): Recipe => ({
   tags: r.tags ?? [],
   notes: r.notes ?? undefined,
   isExample: r.is_example ?? false,
+  printIdeas: r.print_ideas ?? [],
   favoriteCount: r.favorite_count ?? 0,
   viewCount: r.view_count ?? 0,
   stages: [...(r.recipe_stages ?? [])].sort((a: Row, b: Row) => a.position - b.position).map(toStage),
@@ -114,6 +117,7 @@ const toReproduction = (r: Row): Reproduction => ({
   substitutions: r.substitutions ?? [],
   notes: r.notes ?? undefined,
   accuracyRating: r.accuracy_rating,
+  objectPhotos: r.object_photos ?? [],
   createdAt: r.created_at,
 })
 
@@ -239,6 +243,16 @@ export function createSupabaseApi({ url, anonKey }: { url: string; anonKey: stri
     return null
   }
 
+  /** Removes every file in a user's Storage folder (their photos and avatar). */
+  async function removeUserFiles(userId: ID) {
+    for (let i = 0; i < 20; i++) {
+      const { data } = await sb.storage.from('swatches').list(userId, { limit: 100 })
+      if (!data?.length) return
+      check(await sb.storage.from('swatches').remove(data.map((f) => `${userId}/${f.name}`)))
+      if (data.length < 100) return
+    }
+  }
+
   /** Uploads any data: URL photos to Storage and returns them with public URLs. */
   async function persistPhotos(photos: Photo[], userId: ID): Promise<Photo[]> {
     return Promise.all(
@@ -282,6 +296,7 @@ export function createSupabaseApi({ url, anonKey }: { url: string; anonKey: stri
       })),
     }
     const res = check(await sb.rpc('save_recipe', { p: payload, p_publish: publish })) as unknown as { id: ID; slug: string }
+    if (input.printIdeas) check(await sb.rpc('save_recipe_print_ideas', { p_recipe: res.id, p_ideas: input.printIdeas }))
     dirty()
     const r = await fetchRecipe(res.id)
     if (!r) throw new Error('Saved, but the recipe could not be reloaded.')
@@ -300,9 +315,6 @@ export function createSupabaseApi({ url, anonKey }: { url: string; anonKey: stri
       const p = await myProfile()
       if (!p) throw new Error('Signed in, but your profile is missing. Please contact support.')
       return p
-    },
-    async signInDemo() {
-      throw new Error('The demo account is only available in demo mode.')
     },
     async signUp({ email, password, username, displayName }) {
       const uname = username.toLowerCase().trim()
@@ -487,6 +499,7 @@ export function createSupabaseApi({ url, anonKey }: { url: string; anonKey: stri
     async addReproduction(input) {
       const me = await uid()
       const photos = await persistPhotos(input.photos, me)
+      const objectPhotos = await persistPhotos(input.objectPhotos ?? [], me)
       const row = check(
         await sb
           .from('reproductions')
@@ -500,6 +513,7 @@ export function createSupabaseApi({ url, anonKey }: { url: string; anonKey: stri
             substitutions: input.substitutions,
             notes: input.notes || null,
             accuracy_rating: input.accuracyRating,
+            object_photos: objectPhotos,
           })
           .select('*')
           .single(),
@@ -646,6 +660,12 @@ export function createSupabaseApi({ url, anonKey }: { url: string; anonKey: stri
       check(await sb.from('follows').insert({ follower_id: me, followee_id: userId }))
       return true
     },
+    async listFollowingIds() {
+      const { data } = await sb.auth.getSession()
+      if (!data.session) return []
+      const rows = check(await sb.from('follows').select('followee_id').eq('follower_id', data.session.user.id))
+      return rows.map((r) => r.followee_id as ID)
+    },
     async listCreators(limit = 8) {
       const snap = await loadSnapshot()
       const byAuthor = new Map<ID, { recipeCount: number; reproductionsReceived: number }>()
@@ -684,6 +704,94 @@ export function createSupabaseApi({ url, anonKey }: { url: string; anonKey: stri
         reproductionCount: Number(r.reproduction_count),
         lastSignInAt: r.last_sign_in_at ?? null,
       }))
+    },
+
+    async adminDeleteUser(userId) {
+      const me = await myProfile()
+      if (me?.role !== 'admin') throw new Error('Admins only.')
+      if (userId === me.id) throw new Error('Use Settings → Delete my account to delete your own account.')
+      await removeUserFiles(userId)
+      check(await sb.rpc('admin_delete_user', { p_user: userId }))
+      profileCache.delete(userId)
+      dirty()
+    },
+    async adminSetDisabled(userId, disabled) {
+      check(await sb.rpc('admin_set_disabled', { p_user: userId, p_disabled: disabled }))
+      profileCache.delete(userId)
+    },
+    async listReportViews() {
+      const rows = check(await sb.from('reports').select('*').order('created_at', { ascending: false })) as Row[]
+      const byType = (t: string) => rows.filter((r) => r.target_type === t).map((r) => r.target_id as string)
+      const recipeIds = byType('recipe').filter(isUuid)
+      const commentIds = byType('comment').filter(isUuid)
+      const repIds = byType('reproduction').filter(isUuid)
+      const [recs, coms, reps] = await Promise.all([
+        recipeIds.length ? sb.from('recipes').select('id, slug, name, status').in('id', recipeIds) : Promise.resolve({ data: [], error: null }),
+        commentIds.length ? sb.from('comments').select('id, body, recipe:recipes(slug)').in('id', commentIds) : Promise.resolve({ data: [], error: null }),
+        repIds.length ? sb.from('reproductions').select('id, recipe:recipes(slug, name)').in('id', repIds) : Promise.resolve({ data: [], error: null }),
+      ])
+      const recMap = new Map((check(recs) as Row[]).map((r) => [r.id, r]))
+      const comMap = new Map((check(coms) as Row[]).map((r) => [r.id, r]))
+      const repMap = new Map((check(reps) as Row[]).map((r) => [r.id, r]))
+      const profiles = await profilesFor([...rows.map((r) => r.reporter_id), ...byType('user')])
+      return rows.map((r): ReportView => {
+        let target: ReportView['target']
+        if (r.target_type === 'recipe') {
+          const x = recMap.get(r.target_id)
+          target = x ? { label: x.name, href: `/r/${x.slug}`, exists: true, hidden: x.status === 'hidden' } : { label: 'Deleted recipe', exists: false }
+        } else if (r.target_type === 'comment') {
+          const x = comMap.get(r.target_id)
+          target = x ? { label: `“${String(x.body).slice(0, 120)}”`, href: x.recipe ? `/r/${x.recipe.slug}#comments` : undefined, exists: true } : { label: 'Deleted comment', exists: false }
+        } else if (r.target_type === 'reproduction') {
+          const x = repMap.get(r.target_id)
+          target = x ? { label: `Reproduction of ${x.recipe?.name ?? 'a recipe'}`, href: x.recipe ? `/r/${x.recipe.slug}#results` : undefined, exists: true } : { label: 'Deleted reproduction', exists: false }
+        } else {
+          const u = profiles.get(r.target_id)
+          target = u ? { label: `@${u.username}`, href: `/u/${u.username}`, exists: true } : { label: 'Deleted user', exists: false }
+        }
+        return {
+          id: r.id, reporterId: r.reporter_id, targetType: r.target_type, targetId: r.target_id, reason: r.reason, details: r.details ?? undefined,
+          status: r.status, resolutionNote: r.resolution_note ?? undefined, resolvedAt: r.resolved_at ?? undefined, createdAt: r.created_at,
+          reporter: profiles.get(r.reporter_id) ?? null, target,
+        }
+      })
+    },
+    async updateReport(id, patch) {
+      const me = await uid()
+      check(await sb.from('reports').update({
+        status: patch.status,
+        resolution_note: patch.resolutionNote ?? null,
+        resolved_at: patch.status === 'resolved' ? new Date().toISOString() : null,
+        resolved_by: patch.status === 'resolved' ? me : null,
+      }).eq('id', id))
+    },
+    async setRecipeHidden(recipeId, hidden) {
+      check(await sb.from('recipes').update({ status: hidden ? 'hidden' : 'published' }).eq('id', recipeId).neq('status', 'draft'))
+      dirty()
+    },
+    async deleteReproduction(id) {
+      check(await sb.from('reproductions').delete().eq('id', id))
+      dirty()
+    },
+    async deleteMyAccount() {
+      const me = await uid()
+      await removeUserFiles(me)
+      check(await sb.rpc('delete_my_account'))
+      await sb.auth.signOut()
+      profileCache.clear()
+      dirty()
+    },
+    async setAvatar(dataUrl) {
+      const me = await uid()
+      let url: string | null = null
+      if (dataUrl) {
+        const [photo] = await persistPhotos([{ id: `avatar-${Date.now()}`, url: dataUrl, alt: 'Profile photo' }], me)
+        url = photo.url
+      }
+      const row = check(await sb.from('profiles').update({ avatar_url: url }).eq('id', me).select('*').single())
+      const p = toProfile(row)
+      profileCache.set(p.id, p)
+      return p
     },
 
     // -------------------------------------------------- notifications --

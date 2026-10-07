@@ -121,14 +121,18 @@ export interface Stage {
   outputHex?: Hex
 }
 
-export const MIXING_METHODS = [
-  'Filament re-extruder',
-  'Pellet blend',
-  'Shred & re-extrude',
-  'Mixing hotend',
-  '3D pen',
-  'Other',
-] as const
+/** The Multi-Color Filament Mixer (by jetpad on MakerWorld) is the primary method SpoolShare is built around. */
+export const MIXING_METHODS = ['Multi-Color Filament Mixer', 'Other'] as const
+
+/** The mixer has 4 slots; every stage fills all 4. */
+export const MIXER_SLOTS = 4
+
+export const BAMBU_PRINTERS = ['Bambu Lab X1C', 'Bambu Lab X1E', 'Bambu Lab P1S', 'Bambu Lab P1P', 'Bambu Lab P2S', 'Bambu Lab A1', 'Bambu Lab A1 mini', 'Bambu Lab H2D', 'Bambu Lab H2S'] as const
+
+/** Where suggestions and recommendations go. */
+export const CONTACT_EMAIL = 'spoolshare.makerworld@gmail.com'
+
+export const MIXER_URL = 'https://makerworld.com/en/models/460079-multi-color-filament-mixer'
 export type MixingMethod = (typeof MIXING_METHODS)[number]
 
 export type RecipeStatus = 'draft' | 'published' | 'hidden'
@@ -160,6 +164,8 @@ export interface Recipe {
   stages: Stage[]
   /** General notes/tips beyond per-stage instructions. */
   notes?: string
+  /** Optional "Looks great on" inspiration, often links to models on other sites. */
+  printIdeas?: PrintIdea[]
 
   /**
    * Official example recipe whose color came from the prediction model, not a
@@ -174,6 +180,20 @@ export interface Recipe {
 
 // ------------------------------------------------------------- Community --
 
+/**
+ * A suggestion of what to print in a color. External models are links only:
+ * SpoolShare never hosts or claims them.
+ */
+export interface PrintIdea {
+  id: ID
+  /** e.g. "Flowers", "Articulated dragon" */
+  title: string
+  note?: string
+  url?: string
+  /** Hostname-derived label, e.g. "MakerWorld", "Printables". */
+  site?: string
+}
+
 export interface Profile {
   id: ID
   username: string
@@ -187,6 +207,8 @@ export interface Profile {
   inventoryVisibility: 'public' | 'private'
   joinedAt: ISODate
   role?: 'member' | 'moderator' | 'admin'
+  /** Set by an admin: the account can't sign in. */
+  disabled?: boolean
 }
 
 export interface Substitution {
@@ -208,6 +230,8 @@ export interface Reproduction {
   notes?: string
   /** "How close did yours look to the original?" 1–5 */
   accuracyRating: number
+  /** Optional photos of real objects printed with the reproduced filament. */
+  objectPhotos?: Photo[]
   createdAt: ISODate
 }
 
@@ -246,6 +270,8 @@ export interface Report {
   reason: ReportReason
   details?: string
   status: 'open' | 'reviewing' | 'resolved'
+  resolutionNote?: string
+  resolvedAt?: ISODate
   createdAt: ISODate
 }
 

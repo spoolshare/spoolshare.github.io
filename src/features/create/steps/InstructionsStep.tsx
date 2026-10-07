@@ -4,6 +4,7 @@ import { Field, Textarea } from '@/components/ui'
 import { ColorDot } from '@/components/color/Swatch'
 import { useWizard } from '../context'
 import { StepIntro } from './StepIntro'
+import { PrintIdeasEditor } from '../PrintIdeasEditor'
 
 export function InstructionsStep() {
   const { state, dispatch, filaments } = useWizard()
@@ -29,6 +30,8 @@ export function InstructionsStep() {
           placeholder={'- Dry all filament first (4 h at 50 °C)\n- Different white brands shift the result a lot\n- Judge the color in daylight, not under LEDs'}
         />
       </Field>
+
+      <PrintIdeasEditor ideas={d.printIdeas ?? []} onChange={(printIdeas) => dispatch({ type: 'patch', patch: { printIdeas } })} />
 
       <section aria-labelledby="stage-instr-title">
         <h3 id="stage-instr-title" className="mb-3 text-sm font-semibold">Per-stage instructions</h3>

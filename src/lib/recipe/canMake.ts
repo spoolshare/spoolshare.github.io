@@ -12,6 +12,8 @@ export interface CanMakeResult {
   ownedCount: number
   requiredCount: number
   missing: FilamentView[]
+  /** Required filaments the user already owns. */
+  owned: FilamentView[]
   /** Owned filaments that *might* stand in for missing ones. Untested suggestions. */
   substitutes: Substitute[]
 }
@@ -25,13 +27,14 @@ export interface CanMakeResult {
 export function checkCanMake(
   composition: CompositionEntry[],
   filamentsById: Map<ID, FilamentView> | Record<ID, FilamentView>,
-  owned: Set<ID>,
+  owned_: Set<ID>,
   ownedFilaments: FilamentView[] = [],
 ): CanMakeResult {
   const get = (id: ID) => (filamentsById instanceof Map ? filamentsById.get(id) : filamentsById[id])
   const required = composition.map((c) => c.filamentId)
-  const missingIds = required.filter((id) => !owned.has(id))
+  const missingIds = required.filter((id) => !owned_.has(id))
   const missing = missingIds.map(get).filter((f): f is FilamentView => !!f)
+  const owned = required.filter((id) => owned_.has(id)).map(get).filter((f): f is FilamentView => !!f)
 
   const substitutes: Substitute[] = []
   for (const m of missing) {
@@ -49,6 +52,7 @@ export function checkCanMake(
     ownedCount: required.length - missingIds.length,
     requiredCount: required.length,
     missing,
+    owned,
     substitutes,
   }
 }

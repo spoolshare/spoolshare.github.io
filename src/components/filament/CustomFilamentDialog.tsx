@@ -2,14 +2,15 @@ import { useState } from 'react'
 import type { FilamentView, Finish, Hex, Material } from '@/types'
 import { FINISHES, MATERIALS } from '@/types'
 import { api } from '@/lib/api'
-import { invalidate } from '@/lib/hooks/useQuery'
+import { invalidate, useQuery } from '@/lib/hooks/useQuery'
 import { Dialog } from '@/components/ui/overlay'
 import { Field, Input, Select, Textarea } from '@/components/ui/form'
 import { Button } from '@/components/ui/Button'
 import { HexInput } from '@/components/color/ColorPicker'
 
 export function CustomFilamentDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (f: FilamentView) => void }) {
-  const [form, setForm] = useState({ manufacturerName: '', productLineName: '', colorName: '', material: 'PLA' as Material, finish: 'basic' as Finish, hex: '#888888' as Hex, notes: '' })
+  const { data: lines } = useQuery('catalog:lines', () => api.listProductLines())
+  const [form, setForm] = useState({ manufacturerName: 'Bambu Lab', productLineName: '', colorName: '', material: 'PLA' as Material, finish: 'basic' as Finish, hex: '#888888' as Hex, notes: '' })
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }))
@@ -36,7 +37,7 @@ export function CustomFilamentDialog({ open, onClose, onCreated }: { open: boole
       open={open}
       onClose={onClose}
       title="Add a custom filament"
-      description="Custom filaments are private to you until a moderator adds them to the shared catalog."
+      description="For a Bambu Lab color that isn’t in the catalog yet. It stays private to you."
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -45,9 +46,14 @@ export function CustomFilamentDialog({ open, onClose, onCreated }: { open: boole
       }
     >
       <form id="custom-filament" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
-        <Field label="Manufacturer"><Input value={form.manufacturerName} onChange={(e) => set('manufacturerName', e.target.value)} placeholder="e.g. Polymaker" required /></Field>
-        <Field label="Product line"><Input value={form.productLineName} onChange={(e) => set('productLineName', e.target.value)} placeholder="e.g. PolyTerra PLA" required /></Field>
-        <Field label="Official color name" className="sm:col-span-2"><Input value={form.colorName} onChange={(e) => set('colorName', e.target.value)} placeholder="e.g. Arctic Teal" required /></Field>
+        <Field label="Manufacturer" hint="SpoolShare currently supports Bambu Lab filament only."><Input value="Bambu Lab" readOnly aria-readonly /></Field>
+        <Field label="Product line">
+          <Select value={form.productLineName} onChange={(e) => set('productLineName', e.target.value)} required>
+            <option value="">Choose a product line…</option>
+            {lines?.filter((l) => l.manufacturerId === 'bambu').map((l) => <option key={l.id} value={l.name}>{l.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Official color name" className="sm:col-span-2"><Input value={form.colorName} onChange={(e) => set('colorName', e.target.value)} placeholder="e.g. a new or limited Bambu color" required /></Field>
         <Field label="Material">
           <Select value={form.material} onChange={(e) => set('material', e.target.value as Material)}>
             {MATERIALS.map((m) => <option key={m}>{m}</option>)}

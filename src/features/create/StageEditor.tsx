@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, Camera, Plus, Trash2, X } from 'lucide-react'
 import type { FilamentView, ID, Stage, StageSource } from '@/types'
-import { formatRatio, inputFractions, parseRatio, simplestIntegerRatio, toPercentages } from '@/lib/recipe/composition'
+import { MIXER_RATIOS, formatRatio, inputFractions, parseRatio, simplestIntegerRatio, slotCounts, slotLayout, toPercentages } from '@/lib/recipe/composition'
+import { SlotStrip } from '@/components/recipe/SlotStrip'
 import { formatPercent } from '@/lib/utils/format'
 import { cn } from '@/lib/utils/cn'
 import { Button, Field, IconButton, Input, SegmentedControl, Select, Textarea, inputClass } from '@/components/ui'
@@ -53,6 +54,13 @@ export function StageEditor({
   const percentTotal = stage.inputs.reduce((s, i) => s + (i.parts > 0 ? i.parts : 0), 0)
   const sourceHex = (src: StageSource) =>
     src.kind === 'filament' ? filaments[src.filamentId]?.hex : predictStageHex(stages, src.stageId, filaments) ?? undefined
+  const sourceName = (src: StageSource) =>
+    src.kind === 'filament'
+      ? filaments[src.filamentId]?.colorName ?? 'Filament'
+      : (() => { const i = stages.findIndex((x) => x.id === src.stageId); return stages[i]?.outputName || `Stage ${i + 1} output` })()
+  const partsList = stage.inputs.map((i) => i.parts)
+  const slots = slotCounts(partsList)
+  const layout = slotLayout(partsList)
   const usedFilamentIds = stage.inputs.filter((i) => i.source.kind === 'filament').map((i) => (i.source as { filamentId: ID }).filamentId)
   const nextFilament = state.palette.find((id) => !usedFilamentIds.includes(id))
 
@@ -118,6 +126,22 @@ export function StageEditor({
 
           {mode === 'ratio' && stage.inputs.length > 0 && <RatioText stage={stage} />}
 
+          {stage.inputs.length >= 2 && stage.inputs.length <= 4 && (
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-xs text-fg-muted">Mixer ratios:</span>
+              {MIXER_RATIOS.filter((r) => r.parts.length === stage.inputs.length).map((r) => (
+                <button
+                  key={r.label}
+                  type="button"
+                  onClick={() => dispatch({ type: 'setParts', stageId: stage.id, parts: r.parts })}
+                  className="h-7 rounded-full border border-border bg-surface px-2.5 font-mono text-xs font-medium hover:border-border-strong"
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <ul className="space-y-2" role="list">
             {stage.inputs.map((inp, k) => {
               const hex = sourceHex(inp.source)
@@ -175,7 +199,7 @@ export function StageEditor({
 
                   <span className="w-28 shrink-0 text-right text-xs text-fg-muted tabular" aria-label={`Share ${formatPercent(fractions[k])}`}>
                     <span className="font-mono text-sm font-semibold text-fg">{formatPercent(fractions[k], 2)}</span>
-                    {ints && <span className="block">{ints[k]} {ints[k] === 1 ? 'unit' : 'units'}</span>}
+                    {slots ? <span className="block">{slots[k]} of 4 slots</span> : ints && <span className="block">{ints[k]} {ints[k] === 1 ? 'part' : 'parts'}</span>}
                   </span>
                   <IconButton label={`Remove input ${k + 1}`} size="sm" onClick={() => dispatch({ type: 'removeInput', stageId: stage.id, inputId: inp.id })}>
                     <X className="size-4" />
@@ -184,6 +208,16 @@ export function StageEditor({
               )
             })}
           </ul>
+
+          {layout && stage.inputs.every((i) => i.source.kind === 'stage' || i.source.filamentId) && (
+            <div className="mt-3">
+              <div className="mb-1.5 text-xs font-medium text-fg-muted">Mixer slots</div>
+              <SlotStrip size="sm" slots={layout.map((k) => ({ name: sourceName(stage.inputs[k].source), hex: sourceHex(stage.inputs[k].source) ?? '#BBBBBB' }))} />
+            </div>
+          )}
+          {!layout && stage.inputs.length > 0 && stage.inputs.every((i) => i.parts > 0) && (
+            <p className="mt-3 text-xs text-warn" role="status">This ratio doesn’t fit the mixer’s 4 slots. Try 1:1, 3:1, 2:1:1 or 1:1:1:1, or split it across two stages.</p>
+          )}
 
           {stage.inputs.length === 0 && (
             <p className="rounded-xl border border-dashed border-border-strong p-4 text-center text-sm text-fg-muted">

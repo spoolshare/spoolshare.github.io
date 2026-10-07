@@ -53,7 +53,7 @@ export function emptyState(): WizardState {
       photos: [],
       material: 'PLA',
       finish: 'basic',
-      mixingMethod: 'Filament re-extruder',
+      mixingMethod: 'Multi-Color Filament Mixer',
       tags: [],
       stages: [newStage(0)],
       notes: '',
@@ -90,6 +90,7 @@ export function stateFromRecipe(r: Recipe): WizardState {
     tags: r.tags,
     stages: r.stages.length ? r.stages : [newStage(0)],
     notes: r.notes ?? '',
+    printIdeas: r.printIdeas ?? [],
   }
   return { draft, palette: stageFilamentIds(draft.stages), version: 0, prefilled: false }
 }

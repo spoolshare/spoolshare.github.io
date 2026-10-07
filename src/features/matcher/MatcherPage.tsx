@@ -63,7 +63,7 @@ export default function MatcherPage() {
       <PageHeader
         eyebrow="Color Matcher"
         title="Find a tested recipe for any color"
-        description="Pick a target. We rank community-printed swatches by CIEDE2000, a perceptual color difference, not raw RGB distance."
+        description="Pick a target. We rank community colors by CIEDE2000, a perceptual color difference, not raw RGB distance."
       />
 
       <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
@@ -96,7 +96,7 @@ export default function MatcherPage() {
                   {noExact && hits.length > 0 ? 'No exact match yet — closest tested matches' : 'Community-tested matches'}
                 </h2>
                 <p className="mt-0.5 text-sm text-fg-muted">
-                  Real printed swatches. Colors were measured from photos, so treat ΔE below ~2 as identical.
+                  Printed results are estimated from photos, so treat ΔE below ~2 as identical. Official examples show a calculated preview until someone prints them.
                 </p>
               </div>
               {inv.signedIn && <Switch checked={onlyCanMake} onChange={setOnlyCanMake} label="Only recipes I can make" size="sm" />}
@@ -152,7 +152,7 @@ function MatchRow({ hit, target, rank }: { hit: RecipeHit; target: Hex; rank: nu
     <li className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition-shadow hover:shadow-md">
       <div className="grid gap-4 p-4 sm:grid-cols-[180px_1fr] md:grid-cols-[220px_1fr_auto]">
         <div className="relative">
-          <ColorPair a={target} b={recipe.resultHex} aLabel="Target" bLabel="Actual" className="h-24 sm:h-full sm:min-h-24" />
+          <ColorPair a={target} b={recipe.resultHex} aLabel="Target" bLabel={recipe.isExample ? "Calculated" : "Printed"} className="h-24 sm:h-full sm:min-h-24" />
           <span className="absolute -top-2 -left-2 grid size-6 place-items-center rounded-full bg-fg text-[11px] font-bold text-bg tabular">{rank}</span>
         </div>
 
@@ -162,7 +162,7 @@ function MatchRow({ hit, target, rank }: { hit: RecipeHit; target: Hex; rank: nu
             <TrustBadge level={trust} size="xs" />
           </div>
           <DeltaEMeter value={dE} className="max-w-sm" />
-          <p className="font-mono text-[11px] text-fg-subtle" title="Actual minus target, per sRGB channel">
+          <p className="font-mono text-[11px] text-fg-subtle" title="Result minus target, per sRGB channel">
             {target} → {recipe.resultHex} · {diff}
           </p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-fg-muted">

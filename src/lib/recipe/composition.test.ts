@@ -88,3 +88,16 @@ describe('color science', () => {
     expect(km).not.toBe('#FFFFFF')
   })
 })
+
+describe('mixer slots', () => {
+  it('maps ratios onto 4 slots', async () => {
+    const { slotCounts, slotLayout } = await import('./composition')
+    expect(slotCounts([75, 25])).toEqual([3, 1])
+    expect(slotCounts([1, 1])).toEqual([2, 2])
+    expect(slotCounts([2, 1, 1])).toEqual([2, 1, 1])
+    expect(slotCounts([6, 2, 1])).toBeNull()
+    expect(slotLayout([2, 1, 1])).toEqual([0, 1, 0, 2])
+    expect(slotLayout([1, 1])).toEqual([0, 1, 0, 1])
+    expect(slotLayout([3, 1])).toEqual([0, 0, 0, 1])
+  })
+})

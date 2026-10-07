@@ -393,8 +393,6 @@ function DraftsList() {
 }
 
 function SignInGate() {
-  const { signInDemo } = useSession()
-  const [busy, setBusy] = useState(false)
   return (
     <div className="mx-auto max-w-lg px-4 py-16 sm:px-6">
       <Card className="p-8 text-center">
@@ -407,16 +405,6 @@ function SignInGate() {
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <ButtonLink to="/signin">Sign in</ButtonLink>
-          {api.backend === 'mock' && <Button
-            variant="outline"
-            loading={busy}
-            onClick={async () => {
-              setBusy(true)
-              try { await signInDemo() } finally { setBusy(false) }
-            }}
-          >
-            Try the demo account
-          </Button>}
         </div>
         <p className="mt-4 text-xs text-fg-muted">New here? <Link to="/signup" className="font-medium text-accent hover:underline">Create an account</Link></p>
       </Card>

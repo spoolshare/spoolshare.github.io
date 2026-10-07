@@ -2,7 +2,7 @@ import type {
   Collection, FilamentView, ID, InventoryItem, Profile, Recipe, RecipeSummary, Report, Reproduction,
 } from '@/types'
 import type {
-  Achievement, CommentView, FilamentQuery, InventoryEntry, NotificationView, Page, ProfileDetail, RecipeDetail, RecipeDraftInput,
+  Achievement, CommentView, FilamentQuery, InventoryEntry, ReportView, NotificationView, Page, ProfileDetail, RecipeDetail, RecipeDraftInput,
   RecipeHit, RecipeQuery, ReproductionView, SpoolShareApi,
 } from '../types'
 import { deltaE } from '@/lib/color/deltaE'
@@ -72,12 +72,6 @@ export function createMockApi(): SpoolShareApi {
       db.session = { profileId: acc.profileId }
       persist()
       return delay(db.profiles.find((p) => p.id === acc.profileId)!)
-    },
-    async signInDemo() {
-      const db = getDb()
-      db.session = { profileId: 'u-demo' }
-      persist()
-      return delay(db.profiles.find((p) => p.id === 'u-demo')!)
     },
     async signUp({ email, password, username, displayName }) {
       const db = getDb()
@@ -446,10 +440,15 @@ export function createMockApi(): SpoolShareApi {
       persist()
       return delay(true, 30)
     },
+    async listFollowingIds() {
+      const db = getDb()
+      const id = db.session?.profileId
+      return delay(id ? db.follows.filter((f) => f.followerId === id).map((f) => f.followeeId) : [], 0)
+    },
     async listCreators(limit = 8) {
       const db = getDb()
       const rows = db.profiles
-        .filter((p) => p.id !== 'u-demo')
+        .filter((p) => p.username !== 'spoolshare')
         .map((p) => {
           const ids = new Set(db.recipes.filter((r) => r.authorId === p.id && r.status === 'published').map((r) => r.id))
           return { ...p, recipeCount: ids.size, reproductionsReceived: db.reproductions.filter((r) => ids.has(r.recipeId)).length }
@@ -488,6 +487,86 @@ export function createMockApi(): SpoolShareApi {
       return delay(db.reports)
     },
 
+    async adminDeleteUser(userId) {
+      const db = getDb()
+      const user = me(db)
+      if (user.role !== 'admin') throw new ApiError('Admins only.', 'unauthorized')
+      if (userId === user.id) throw new ApiError('Use Settings → Delete my account to delete your own account.', 'invalid')
+      const target = db.profiles.find((p) => p.id === userId)
+      if (target?.username === 'spoolshare') throw new ApiError('The official SpoolShare account holds the example recipes and can’t be deleted here.', 'invalid')
+      wipeUser(db, userId)
+      persist()
+      return delay(undefined, 150)
+    },
+    async adminSetDisabled(userId, disabled) {
+      const db = getDb()
+      const user = me(db)
+      if (user.role !== 'admin') throw new ApiError('Admins only.', 'unauthorized')
+      if (userId === user.id) throw new ApiError('You can’t disable your own account.', 'invalid')
+      const target = db.profiles.find((p) => p.id === userId)
+      if (!target) throw new ApiError('User not found.', 'not_found')
+      target.disabled = disabled
+      persist()
+      return delay(undefined, 100)
+    },
+    async listReportViews() {
+      const db = getDb()
+      const user = me(db)
+      if (user.role !== 'moderator' && user.role !== 'admin') throw new ApiError('Moderators only.', 'unauthorized')
+      const views: ReportView[] = db.reports
+        .slice()
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+        .map((r) => ({ ...r, reporter: db.profiles.find((p) => p.id === r.reporterId) ?? null, target: describeTarget(db, r) }))
+      return delay(views)
+    },
+    async updateReport(id, patch) {
+      const db = getDb()
+      const user = me(db)
+      if (user.role !== 'moderator' && user.role !== 'admin') throw new ApiError('Moderators only.', 'unauthorized')
+      const r = db.reports.find((x) => x.id === id)
+      if (!r) throw new ApiError('Report not found.', 'not_found')
+      Object.assign(r, patch, patch.status === 'resolved' ? { resolvedAt: new Date().toISOString() } : {})
+      persist()
+      return delay(undefined, 80)
+    },
+    async setRecipeHidden(recipeId, hidden) {
+      const db = getDb()
+      const user = me(db)
+      if (user.role !== 'moderator' && user.role !== 'admin') throw new ApiError('Moderators only.', 'unauthorized')
+      const r = db.recipes.find((x) => x.id === recipeId)
+      if (r && r.status !== 'draft') r.status = hidden ? 'hidden' : 'published'
+      persist()
+      return delay(undefined, 80)
+    },
+    async deleteReproduction(id) {
+      const db = getDb()
+      const user = me(db)
+      const rep = db.reproductions.find((x) => x.id === id)
+      if (!rep) return delay(undefined)
+      if (rep.userId !== user.id && user.role !== 'moderator' && user.role !== 'admin') throw new ApiError('Not allowed.', 'unauthorized')
+      db.reproductions = db.reproductions.filter((x) => x.id !== id)
+      persist()
+      return delay(undefined, 80)
+    },
+    async deleteMyAccount() {
+      const db = getDb()
+      const user = me(db)
+      if (user.role === 'admin' && db.profiles.filter((p) => p.role === 'admin').length === 1) {
+        throw new ApiError('You’re the only admin. Make someone else an admin before deleting your account.', 'invalid')
+      }
+      wipeUser(db, user.id)
+      db.session = null
+      persist()
+      return delay(undefined, 200)
+    },
+    async setAvatar(dataUrl) {
+      const db = getDb()
+      const user = me(db)
+      user.avatarUrl = dataUrl ?? undefined
+      persist()
+      return delay(user, 120)
+    },
+
     // -------------------------------------------------- notifications --
     async listNotifications() {
       const db = getDb()
@@ -514,6 +593,42 @@ export function createMockApi(): SpoolShareApi {
       return delay(undefined, 0)
     },
   }
+}
+
+/** Removes an account and everything it created. */
+function wipeUser(db: DB, userId: ID) {
+  const recipeIds = new Set(db.recipes.filter((r) => r.authorId === userId).map((r) => r.id))
+  db.recipes = db.recipes.filter((r) => r.authorId !== userId)
+  db.reproductions = db.reproductions.filter((r) => r.userId !== userId && !recipeIds.has(r.recipeId))
+  db.comments = db.comments.filter((c) => c.userId !== userId && !recipeIds.has(c.recipeId))
+  db.favorites = db.favorites.filter((f) => f.userId !== userId && !recipeIds.has(f.recipeId))
+  db.collections = db.collections.filter((c) => c.userId !== userId)
+  db.follows = db.follows.filter((f) => f.followerId !== userId && f.followeeId !== userId)
+  db.inventory = db.inventory.filter((i) => i.userId !== userId)
+  db.notifications = db.notifications.filter((n) => n.userId !== userId && n.actorId !== userId)
+  db.reports = db.reports.filter((r) => r.reporterId !== userId)
+  db.filaments = db.filaments.filter((f) => f.ownerId !== userId)
+  db.accounts = db.accounts.filter((a) => a.profileId !== userId)
+  db.profiles = db.profiles.filter((p) => p.id !== userId)
+}
+
+function describeTarget(db: DB, r: Report): ReportView['target'] {
+  if (r.targetType === 'recipe') {
+    const x = db.recipes.find((y) => y.id === r.targetId)
+    return x ? { label: x.name, href: `/r/${x.slug}`, exists: true, hidden: x.status === 'hidden' } : { label: 'Deleted recipe', exists: false }
+  }
+  if (r.targetType === 'comment') {
+    const c = db.comments.find((y) => y.id === r.targetId)
+    const rec = c && db.recipes.find((y) => y.id === c.recipeId)
+    return c ? { label: `“${c.body.slice(0, 120)}”`, href: rec ? `/r/${rec.slug}#comments` : undefined, exists: true } : { label: 'Deleted comment', exists: false }
+  }
+  if (r.targetType === 'reproduction') {
+    const x = db.reproductions.find((y) => y.id === r.targetId)
+    const rec = x && db.recipes.find((y) => y.id === x.recipeId)
+    return x ? { label: `Reproduction of ${rec?.name ?? 'a recipe'}`, href: rec ? `/r/${rec.slug}#results` : undefined, exists: true } : { label: 'Deleted reproduction', exists: false }
+  }
+  const u = db.profiles.find((y) => y.id === r.targetId)
+  return u ? { label: `@${u.username}`, href: `/u/${u.username}`, exists: true } : { label: 'Deleted user', exists: false }
 }
 
 function upsertRecipe(input: RecipeDraftInput, status: Recipe['status']): Recipe {

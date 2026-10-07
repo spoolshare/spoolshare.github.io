@@ -4,7 +4,7 @@
  */
 import type {
   Collection, Comment, FilamentView, Finish, Hex, ID, InventoryItem, Manufacturer, Material, MixingMethod,
-  Notification, Photo, ProductLine, Profile, Recipe, RecipeSummary, Report, ReportReason, Reproduction,
+  Notification, Photo, PrintIdea, ProductLine, Profile, Recipe, RecipeSummary, Report, ReportReason, Reproduction,
   Stage, Substitution, TrustLevel,
 } from '@/types'
 
@@ -63,6 +63,8 @@ export interface RecipeQuery {
   minStages?: number
   maxStages?: number
   authorId?: ID
+  /** Any of these authors (e.g. people I follow). */
+  authorIds?: ID[]
   trust?: TrustLevel[]
   /** When set, only recipes whose every filament is in this list. */
   canMakeWith?: ID[]
@@ -110,6 +112,7 @@ export interface RecipeDraftInput {
   tags: string[]
   stages: Stage[]
   notes?: string
+  printIdeas?: PrintIdea[]
 }
 
 export interface ReproductionInput {
@@ -121,6 +124,7 @@ export interface ReproductionInput {
   substitutions: Substitution[]
   notes?: string
   accuracyRating: number
+  objectPhotos?: Photo[]
 }
 
 // ------------------------------------------------------------ Profiles ---
@@ -153,6 +157,20 @@ export interface NotificationView extends Notification {
   recipe?: Pick<Recipe, 'id' | 'slug' | 'name' | 'resultHex'>
 }
 
+/** A report plus what an admin needs to judge it. */
+export interface ReportView extends Report {
+  reporter: Profile | null
+  target: {
+    /** Short human description, e.g. the recipe name or comment text. */
+    label: string
+    /** Where to look at it in the app, if it still exists. */
+    href?: string
+    exists: boolean
+    /** For recipes: whether it's currently hidden by a moderator. */
+    hidden?: boolean
+  }
+}
+
 export interface MemberRow {
   profile: Profile
   /** Only ever returned to admins. */
@@ -170,7 +188,6 @@ export interface SpoolShareApi {
   // auth
   getSession(): Promise<Profile | null>
   signIn(email: string, password: string): Promise<Profile>
-  signInDemo(): Promise<Profile>
   signUp(input: SignUpInput): Promise<Profile>
   signOut(): Promise<void>
   /** Fires when the session changes outside the app (token refresh, other tab, email link). */
@@ -219,6 +236,8 @@ export interface SpoolShareApi {
   getProfile(username: string): Promise<ProfileDetail | null>
   updateProfile(patch: Partial<Omit<Profile, 'id' | 'joinedAt'>>): Promise<Profile>
   toggleFollow(userId: ID): Promise<boolean>
+  /** Ids of the people the signed-in user follows. */
+  listFollowingIds(): Promise<ID[]>
   listCreators(limit?: number): Promise<(Profile & { recipeCount: number; reproductionsReceived: number })[]>
 
   // moderation
@@ -226,6 +245,21 @@ export interface SpoolShareApi {
   listReports(): Promise<Report[]>
   /** Admin only: everyone with an account. */
   listMembers(): Promise<MemberRow[]>
+  /** Admin only. Deletes the account and everything it created (irreversible). */
+  adminDeleteUser(userId: ID): Promise<void>
+  /** Admin only. A disabled account can't sign in; its content stays until moderated. */
+  adminSetDisabled(userId: ID, disabled: boolean): Promise<void>
+  listReportViews(): Promise<ReportView[]>
+  updateReport(id: ID, patch: { status: Report['status']; resolutionNote?: string }): Promise<void>
+  /** Moderator action on a reported recipe. */
+  setRecipeHidden(recipeId: ID, hidden: boolean): Promise<void>
+  deleteReproduction(id: ID): Promise<void>
+
+  // account
+  /** Permanently deletes the signed-in user's account, content and photos. */
+  deleteMyAccount(): Promise<void>
+  /** Sets (data: URL) or clears (null) the signed-in user's profile photo. */
+  setAvatar(dataUrl: string | null): Promise<Profile>
 
   // notifications
   listNotifications(): Promise<NotificationView[]>

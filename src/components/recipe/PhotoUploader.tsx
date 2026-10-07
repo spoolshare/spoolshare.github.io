@@ -19,6 +19,8 @@ export function PhotoUploader({
   max = 6,
   className,
   defaultAlt = 'Printed swatch',
+  showTips = true,
+  emptyLabel,
 }: {
   photos: Photo[]
   onChange: (photos: Photo[]) => void
@@ -26,6 +28,9 @@ export function PhotoUploader({
   max?: number
   className?: string
   defaultAlt?: string
+  /** Swatch tips (lighting advice + official swatch download). Off for object photos. */
+  showTips?: boolean
+  emptyLabel?: string
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
@@ -74,14 +79,14 @@ export function PhotoUploader({
 
   return (
     <div className={className}>
-      <OfficialSwatchCard className="mb-3" />
-      <div className="mb-3 flex items-start gap-2.5 rounded-xl border border-info/20 bg-info-soft p-3 text-sm">
+      {showTips && <OfficialSwatchCard className="mb-3" />}
+      {showTips && <div className="mb-3 flex items-start gap-2.5 rounded-xl border border-info/20 bg-info-soft p-3 text-sm">
         <Lightbulb className="mt-0.5 size-4 shrink-0 text-info" aria-hidden />
         <p className="text-fg">
           For the most accurate result, photograph your swatch in <b>bright, neutral lighting without filters</b>. Daylight
           by a window is ideal; avoid flash and colored LEDs. Put a white sheet of paper in frame for reference.
         </p>
-      </div>
+      </div>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {photos.map((p, i) => (
@@ -149,7 +154,7 @@ export function PhotoUploader({
             )}
           >
             {photos.length === 0 ? <Camera className="size-7" aria-hidden /> : <ImagePlus className="size-6" aria-hidden />}
-            <span className="font-medium text-fg">{busy ? 'Processing…' : photos.length === 0 ? 'Add swatch photo' : 'Add another'}</span>
+            <span className="font-medium text-fg">{busy ? 'Processing…' : photos.length === 0 ? emptyLabel ?? 'Add swatch photo' : 'Add another'}</span>
             <span className="text-xs">Drop or click · JPG, PNG, HEIC</span>
           </button>
         )}
@@ -170,31 +175,28 @@ export function PhotoUploader({
   )
 }
 
-const SWATCH_URL = `${import.meta.env.BASE_URL}downloads/SpoolShareSwatch.3mf`
+const SWATCH_BASE = `${import.meta.env.BASE_URL}downloads/SpoolShareSwatch`
 
-/** Optional standardized test swatch, so everyone photographs the same flat surface. */
+/** Optional standardized test swatch: a blank, unbranded flat plaque so everyone's photos compare the same surface. */
 export function OfficialSwatchCard({ className }: { className?: string }) {
+  const link = 'inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-border-strong bg-surface px-3 text-sm font-medium hover:bg-surface-3'
   return (
     <div className={cn('flex flex-col gap-3 rounded-xl border border-border bg-surface-2 p-3 sm:flex-row sm:items-center', className)}>
-      <svg viewBox="0 0 48 32" className="h-10 w-14 shrink-0" aria-hidden>
-        <rect x="2" y="4" width="44" height="24" rx="4" className="fill-surface-3 stroke-border-strong" strokeWidth="1.5" />
-        <rect x="6" y="8" width="16" height="16" rx="2" className="fill-accent" opacity="0.85" />
-        <rect x="26" y="8" width="16" height="7" rx="1.5" className="fill-border-strong" />
-        <rect x="26" y="17" width="10" height="7" rx="1.5" className="fill-border-strong" />
+      <svg viewBox="0 0 40 40" className="size-10 shrink-0" aria-hidden>
+        <rect x="2" y="2" width="36" height="36" rx="3" className="fill-surface-3 stroke-border-strong" strokeWidth="1.5" />
+        <path d="M7 12V7h6" className="stroke-border-strong" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <circle cx="32" cy="32" r="3" className="fill-surface-2 stroke-border-strong" strokeWidth="1.2" />
       </svg>
       <div className="min-w-0 flex-1 text-sm">
-        <div className="font-semibold">Official SpoolShare Swatch</div>
+        <div className="font-semibold">Standard test swatch</div>
         <p className="text-fg-muted">
-          A standardized flat test print, so everyone’s photos compare the same surface. <span className="whitespace-nowrap">Optional: any flat print works.</span>
+          A blank 40 × 40 mm flat swatch, so everyone’s photos compare the same surface. <span className="whitespace-nowrap">Optional: any flat print works.</span>
         </p>
       </div>
-      <a
-        href={SWATCH_URL}
-        download="SpoolShareSwatch.3mf"
-        className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-border-strong bg-surface px-3 text-sm font-medium hover:bg-surface-3"
-      >
-        <Download className="size-4" aria-hidden /> Download 3MF
-      </a>
+      <div className="flex shrink-0 gap-2">
+        <a href={`${SWATCH_BASE}.3mf`} download="SpoolShareSwatch.3mf" className={link}><Download className="size-4" aria-hidden /> 3MF</a>
+        <a href={`${SWATCH_BASE}.stl`} download="SpoolShareSwatch.stl" className={link}><Download className="size-4" aria-hidden /> STL</a>
+      </div>
     </div>
   )
 }

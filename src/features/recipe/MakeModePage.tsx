@@ -8,8 +8,10 @@ import { useSession } from '@/lib/hooks/useSession'
 import { useLocalStorage } from '@/lib/hooks/useLocalStorage'
 import { planRecipe, type Plan } from '@/lib/recipe/composition'
 import { cn } from '@/lib/utils/cn'
+import { slotLayout } from '@/lib/recipe/composition'
+import { SlotStrip } from '@/components/recipe/SlotStrip'
 import { formatGrams, formatPercent } from '@/lib/utils/format'
-import { isVeryLight, readableOn } from '@/lib/color/convert'
+import { readableOn } from '@/lib/color/convert'
 import { ColorDot, HexChip } from '@/components/color/Swatch'
 import { ButtonLink, Button, Card, EmptyState, Skeleton } from '@/components/ui'
 import { BatchControls, describeInput } from './shared'
@@ -202,55 +204,46 @@ function buildSteps(plan: Plan, stages: Stage[], byId: Record<ID, FilamentView>,
     const steps: Step[] = []
     const described = ps.inputs.map((pi) => ({ pi, d: describeInput(pi.input, stages, byId) }))
 
-    described.forEach(({ pi, d }) => {
-      steps.push({
-        id: `${s.id}:weigh:${pi.input.id}`,
-        kind: 'weigh',
-        title: `Weigh ${formatGrams(pi.grams)} of ${d.name}`,
-        body: (
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <ColorDot hex={d.hex} size={14} />
-            {d.detail} · {formatPercent(pi.fraction)} of this stage
-          </span>
-        ),
-      })
-    })
-
-    const hasUnits = described.every(({ pi }) => pi.units != null)
-    if (hasUnits) {
-      const sequence = described.flatMap(({ pi, d }) => Array.from({ length: pi.units! }, () => d))
+    const layout = slotLayout(ps.inputs.map((pi) => pi.input.parts))
+    if (layout) {
       steps.push({
         id: `${s.id}:load`,
         kind: 'load',
-        title: `Load ${sequence.length} equal pieces in this order`,
+        title: 'Load the mixer’s 4 AMS slots',
         body: (
-          <span className="mt-1 flex flex-wrap gap-1.5">
-            {sequence.map((d, i) => (
-              <span
-                key={i}
-                className={cn('inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium', isVeryLight(d.hex) && 'ring-1 ring-border-strong')}
-                style={{ background: d.hex, color: readableOn(d.hex) }}
-              >
-                <span className="opacity-70 tabular">{i + 1}</span> {d.name}
-              </span>
-            ))}
+          <span className="mt-1 block">
+            <SlotStrip slots={layout.map((k) => ({ name: described[k].d.name, hex: described[k].d.hex }))} />
+            <span className="mt-1.5 block text-xs text-fg-muted">The same filament is kept out of neighboring slots where possible, for a more even blend.</span>
           </span>
         ),
       })
     } else {
+      described.forEach(({ pi, d }) => {
+        steps.push({
+          id: `${s.id}:weigh:${pi.input.id}`,
+          kind: 'weigh',
+          title: `Weigh ${formatGrams(pi.grams)} of ${d.name}`,
+          body: (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <ColorDot hex={d.hex} size={14} />
+              {d.detail} · {formatPercent(pi.fraction)} of this stage
+            </span>
+          ),
+        })
+      })
       steps.push({
         id: `${s.id}:load`,
         kind: 'load',
         title: 'Combine the weighed filament',
-        body: 'This ratio doesn’t reduce to a small whole-number count, so combine by weight rather than by equal pieces.',
+        body: 'This ratio doesn’t fit the mixer’s 4 slots, so combine by weight instead.',
       })
     }
 
     steps.push({
       id: `${s.id}:mix`,
       kind: 'mix',
-      title: ps.isFinal ? `Mix into ${formatGrams(ps.grams)} of ${s.outputName || 'final color'}` : `Mix into ${formatGrams(ps.grams)} of ${s.outputName}`,
-      body: s.instructions || 'Purge until the color is uniform with no streaks.',
+      title: layout ? `Print the mixer to make ${s.outputName || 'the final color'}` : `Mix into ${formatGrams(ps.grams)} of ${s.outputName || 'final color'}`,
+      body: s.instructions || 'Print the Multi-Color Filament Mixer. Its output is your new single-color filament.',
     })
 
     if (!ps.isFinal) {

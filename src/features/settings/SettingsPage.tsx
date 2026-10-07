@@ -1,14 +1,17 @@
-import { useState, type ReactNode } from 'react'
+import { BAMBU_PRINTERS } from '@/types'
+import { useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { Database, LogOut, Monitor, Moon, Plus, RotateCcw, Sun, X } from 'lucide-react'
 import type { Profile } from '@/types'
 import { api } from '@/lib/api'
 import { resetDb } from '@/lib/api/mock/db'
+import { loadImage, readFileAsDataUrl } from '@/lib/color/photo'
 import { invalidate } from '@/lib/hooks/useQuery'
 import { useSession } from '@/lib/hooks/useSession'
 import { useTheme, type ThemePref } from '@/lib/hooks/usePreferences'
 import {
   Avatar, Badge, Button, ButtonLink, Card, Dialog, EmptyState, Field, Input, PageHeader, SegmentedControl, Switch, Textarea, useToast,
+  Select,
 } from '@/components/ui'
 
 export default function SettingsPage() {
@@ -33,6 +36,7 @@ export default function SettingsPage() {
         <Section title="Account">
           <Button variant="outline" icon={<LogOut className="size-4" />} onClick={async () => { await signOut(); navigate('/') }}>Sign out</Button>
         </Section>
+        <DeleteAccountSection user={user} />
       </div>
     </div>
   )
@@ -79,23 +83,19 @@ function ProfileSection({ user }: { user: Profile }) {
   return (
     <Section title="Profile" description="Shown on your public profile and next to your recipes.">
       <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
-        <div className="flex items-center gap-3 sm:col-span-2">
-          <Avatar profile={{ ...user, displayName: form.displayName || user.displayName }} size="lg" />
-          <p className="text-sm text-fg-muted">Your avatar is generated from your name. Photo uploads arrive with the Supabase backend.</p>
-        </div>
+        <AvatarEditor user={user} displayName={form.displayName || user.displayName} />
         <Field label="Display name" htmlFor="st-name"><Input id="st-name" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></Field>
         <Field label="Username" htmlFor="st-user"><Input id="st-user" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value.toLowerCase() })} leading={<span className="text-sm">@</span>} /></Field>
         <Field label="Bio" optional className="sm:col-span-2" htmlFor="st-bio"><Textarea id="st-bio" rows={3} maxLength={280} value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} placeholder="What do you like to mix?" /></Field>
         <Field label="Location" optional htmlFor="st-loc"><Input id="st-loc" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
-        <Field label="Printers" optional htmlFor="st-printer" hint="Press Enter to add.">
-          <Input
-            id="st-printer"
-            value={printer}
-            onChange={(e) => setPrinter(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPrinter() } }}
-            placeholder="Bambu Lab P1S"
-            trailing={<button type="button" onClick={addPrinter} aria-label="Add printer" className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"><Plus className="size-4" /></button>}
-          />
+        <Field label="Printers" optional htmlFor="st-printer" hint="Pick each Bambu printer you own.">
+          <div className="flex gap-2">
+            <Select id="st-printer" value={printer} onChange={(e) => setPrinter(e.target.value)} className="flex-1">
+              <option value="">Choose a printer…</option>
+              {BAMBU_PRINTERS.filter((p) => !form.printers.includes(p)).map((p) => <option key={p} value={p}>{p}</option>)}
+            </Select>
+            <Button variant="outline" onClick={addPrinter} disabled={!printer} icon={<Plus className="size-4" />}>Add</Button>
+          </div>
         </Field>
         {form.printers.length > 0 && (
           <div className="flex flex-wrap gap-1.5 sm:col-span-2">
@@ -163,23 +163,145 @@ function DataSection() {
       {api.backend === 'mock' && (
         <>
           <p className="mt-2 text-sm text-fg-muted">All accounts, recipes and photos are stored in this browser’s localStorage.</p>
-          <Button className="mt-4" variant="outline" icon={<RotateCcw className="size-4" />} onClick={() => setConfirm(true)}>Reset demo data</Button>
+          <Button className="mt-4" variant="outline" icon={<RotateCcw className="size-4" />} onClick={() => setConfirm(true)}>Reset local data</Button>
           <Dialog
             open={confirm}
             onClose={() => setConfirm(false)}
-            title="Reset demo data?"
+            title="Reset local data?"
             size="sm"
             footer={
               <>
                 <Button variant="ghost" onClick={() => setConfirm(false)}>Cancel</Button>
-                <Button variant="danger" onClick={() => { resetDb(); invalidate(); setConfirm(false); toast('Demo data restored') }}>Reset everything</Button>
+                <Button variant="danger" onClick={() => { resetDb(); invalidate(); setConfirm(false); toast('Local data reset') }}>Reset everything</Button>
               </>
             }
           >
-            <p className="text-sm text-fg-muted">This deletes every account, recipe, reproduction and photo you created in this browser and restores the seeded demo world.</p>
+            <p className="text-sm text-fg-muted">This deletes every account, recipe, reproduction and photo you created in this browser and restores the official example recipes.</p>
           </Dialog>
         </>
       )}
     </Section>
+  )
+}
+
+/** Profile photo with generated initials as the fallback. Images are cropped square and downscaled. */
+function AvatarEditor({ user, displayName }: { user: Profile; displayName: string }) {
+  const toast = useToast()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const apply = async (dataUrl: string | null) => {
+    setBusy(true)
+    try {
+      await api.setAvatar(dataUrl)
+      invalidate()
+      toast(dataUrl ? 'Profile photo updated' : 'Profile photo removed')
+    } catch (e) {
+      toast((e as Error).message, { tone: 'error' })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+      <Avatar profile={{ ...user, displayName }} size="lg" />
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" loading={busy} onClick={() => inputRef.current?.click()}>
+          {user.avatarUrl ? 'Change photo' : 'Upload photo'}
+        </Button>
+        {user.avatarUrl && <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => apply(null)}>Remove photo</Button>}
+      </div>
+      <p className="basis-full text-xs text-fg-muted">Square images work best. Without a photo, your initials are shown.</p>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={async (e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ''
+          if (!file) return
+          if (file.size > 15 * 1024 * 1024) return toast('That image is larger than 15 MB.', { tone: 'error' })
+          try {
+            await apply(await squareAvatar(file))
+          } catch {
+            toast('Couldn’t read that image.', { tone: 'error' })
+          }
+        }}
+      />
+    </div>
+  )
+}
+
+/** Center-crops to a square and downsizes to 256px JPEG. */
+async function squareAvatar(file: File): Promise<string> {
+  const src = await readFileAsDataUrl(file)
+  const img = await loadImage(src)
+  const side = Math.min(img.width, img.height)
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = 256
+  canvas.getContext('2d')!.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256)
+  return canvas.toDataURL('image/jpeg', 0.88)
+}
+
+/** Permanent account deletion, guarded by typing the username. */
+function DeleteAccountSection({ user }: { user: Profile }) {
+  const navigate = useNavigate()
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const matches = typed.trim().toLowerCase() === user.username
+
+  return (
+    <Card className="border-danger/40 p-5 sm:p-6">
+      <h2 className="text-base font-semibold text-danger">Delete account</h2>
+      <p className="mt-1 text-sm text-fg-muted">
+        Permanently deletes your account and everything you’ve created: recipes, reproductions, photos, comments, saved recipes,
+        collections and your filament list. This can’t be undone.
+      </p>
+      <Button variant="danger" className="mt-4" onClick={() => { setTyped(''); setError(null); setOpen(true) }}>Delete my account…</Button>
+      <Dialog
+        open={open}
+        onClose={() => !busy && setOpen(false)}
+        title="Delete your account?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
+            <Button
+              variant="danger"
+              disabled={!matches}
+              loading={busy}
+              onClick={async () => {
+                setBusy(true)
+                setError(null)
+                try {
+                  await api.deleteMyAccount()
+                  invalidate()
+                  setOpen(false)
+                  toast('Your account has been deleted', { tone: 'info' })
+                  navigate('/')
+                } catch (e) {
+                  setError((e as Error).message)
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              Permanently delete
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-fg-muted">
+          This removes <b className="text-fg">@{user.username}</b> and all of its content for good. To confirm, type your username below.
+        </p>
+        <Field label="Your username" htmlFor="del-confirm" className="mt-4">
+          <Input id="del-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={user.username} autoComplete="off" />
+        </Field>
+        {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
+      </Dialog>
+    </Card>
   )
 }

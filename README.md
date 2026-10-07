@@ -1,6 +1,6 @@
 # SpoolShare
 
-**Mix a color. Share the recipe.**
+A community library of filament colors made with the Multi-Color Filament Mixer.
 
 SpoolShare is a community database of *physically tested* mixed-filament color recipes for 3D printing.
 Makers track the filament they own, find community recipes they can make right now, follow

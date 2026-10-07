@@ -54,7 +54,7 @@ export default function ComparePage() {
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
-      <PageHeader eyebrow="Compare" title="Side-by-side colors" description="Compare up to four recipes: measured color, ΔE00 between each pair, ingredients, and reliability." />
+      <PageHeader eyebrow="Compare" title="Side-by-side colors" description="Compare up to four recipes: result color, ΔE00 between each pair, ingredients, and reliability." />
 
       <AddRecipe ids={ids} onAdd={(id) => setIds([...ids, id].slice(0, 4))} />
 

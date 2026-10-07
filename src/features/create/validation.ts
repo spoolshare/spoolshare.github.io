@@ -34,6 +34,12 @@ export function checkStep(step: number, state: WizardState): StepCheck {
     case 'color':
       if (state.prefilled && d.photos.length === 0) warnings.push('This color is still the calculated prediction. Replace it with your measured result.')
       break
+    case 'instructions':
+      for (const idea of d.printIdeas ?? []) {
+        if (!idea.title.trim()) errors.push('Each print idea needs a title (or remove it).')
+        if (idea.url && !/^https?:\/\/\S+\.\S+/i.test(idea.url)) errors.push(`“${idea.title || 'Print idea'}” has an invalid link. Use a full https:// address.`)
+      }
+      break
     case 'ingredients':
       if (state.palette.length === 0) errors.push('Add at least one filament you used.')
       else if (state.palette.length === 1) warnings.push('One filament alone isn’t a mix. Add the other colors you blended.')

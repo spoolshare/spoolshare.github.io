@@ -7,9 +7,7 @@ import type {
   Report, Reproduction,
 } from '@/types'
 import { filaments, manufacturers, productLines } from './seed/catalog'
-import {
-  DEMO_USER_ID, comments, demoCollections, demoInventory, demoNotifications, follows, profiles, recipes, reproductions,
-} from './seed/community'
+import { collections, comments, follows, notifications, profiles, recipes, reproductions } from './seed/community'
 
 export interface Account {
   email: string
@@ -38,7 +36,7 @@ export interface DB {
 }
 
 const KEY = 'spoolshare:db'
-const VERSION = 4
+const VERSION = 7
 
 export function digest(password: string): string {
   let h = 5381
@@ -47,37 +45,24 @@ export function digest(password: string): string {
 }
 
 function seed(): DB {
-  const now = new Date().toISOString()
   return {
     version: VERSION,
     manufacturers,
     productLines,
     filaments,
     profiles,
-    accounts: [{ email: 'demo@spoolshare.app', passwordDigest: digest('demo'), profileId: DEMO_USER_ID }],
-    inventory: demoInventory.map((filamentId, i) => ({
-      id: `inv-${i}`,
-      userId: DEMO_USER_ID,
-      filamentId,
-      spools: 1,
-      remainingGrams: [1000, 820, 640, 900, 450, 1000, 700, 300, 950, 600, 880, 400][i % 12],
-      addedAt: now,
-    })),
+    accounts: [],
+    inventory: [],
     recipes,
     reproductions,
     comments,
-    favorites: [
-      { userId: DEMO_USER_ID, recipeId: 'r-dusty-lavender', createdAt: now },
-      { userId: DEMO_USER_ID, recipeId: 'r-mint-chip', createdAt: now },
-      { userId: DEMO_USER_ID, recipeId: 'r-sakura-milk', createdAt: now },
-      { userId: DEMO_USER_ID, recipeId: 'r-storm-cloud', createdAt: now },
-    ],
-    collections: demoCollections,
-    follows: [...follows, { followerId: DEMO_USER_ID, followeeId: 'u-kenji', createdAt: now }],
+    favorites: [],
+    collections,
+    follows,
     reports: [],
-    notifications: demoNotifications,
-    // First visit: start in the demo account so the inventory-aware features are visible immediately.
-    session: { profileId: DEMO_USER_ID },
+    notifications,
+    // Signed out: create an account (stored only in this browser) to try signed-in features.
+    session: null,
   }
 }
 

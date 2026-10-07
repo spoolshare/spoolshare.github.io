@@ -1,3 +1,4 @@
+import { BAMBU_PRINTERS } from '@/types'
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { FINISHES, MATERIALS, MIXING_METHODS, type Finish, type Material, type MixingMethod } from '@/types'
@@ -64,10 +65,11 @@ export function BasicsStep({ showErrors }: { showErrors: boolean }) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Printer" optional htmlFor="r-printer">
-          <Input id="r-printer" list="r-printers" value={d.printer ?? ''} onChange={(e) => patch({ printer: e.target.value || undefined })} placeholder="Bambu Lab X1C" />
-          <datalist id="r-printers">
-            {user?.printers.map((p) => <option key={p} value={p} />)}
-          </datalist>
+          <Select id="r-printer" value={d.printer ?? ''} onChange={(e) => patch({ printer: e.target.value || undefined })}>
+            <option value="">Not specified</option>
+            {BAMBU_PRINTERS.map((p) => <option key={p} value={p}>{p}{user?.printers.includes(p) ? ' (yours)' : ''}</option>)}
+            {d.printer && !(BAMBU_PRINTERS as readonly string[]).includes(d.printer) && <option value={d.printer}>{d.printer}</option>}
+          </Select>
         </Field>
         <Field label="Nozzle" optional htmlFor="r-nozzle">
           <Input id="r-nozzle" value={d.nozzle ?? ''} onChange={(e) => patch({ nozzle: e.target.value || undefined })} placeholder="0.4 mm hardened steel" />
